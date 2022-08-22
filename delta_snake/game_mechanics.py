@@ -1,17 +1,18 @@
-import enum
 import random
 import time
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
+
+import gym
 import pygame
 import torch
 from gym.spaces import Box, Discrete
 from torch import nn
 
-ARENA_WIDTH = 80
-ARENA_HEIGHT = 60
+ARENA_WIDTH = 30
+ARENA_HEIGHT = 30
 BLOCK_SIZE = 10
 
 SCREEN_WIDTH = ARENA_WIDTH * BLOCK_SIZE
@@ -33,7 +34,7 @@ def load_network(team_name: str, network_folder: Path = HERE) -> nn.Module:
     assert (
         net_path.exists()
     ), f"Network saved using TEAM_NAME='{team_name}' doesn't exist! ({net_path})"
-    model = torch.load(net_path)
+    model = torch.load(str(HERE / net_path))
     model.eval()
     return model
 
@@ -48,7 +49,7 @@ def save_network(network: nn.Module, team_name: str) -> None:
     for attempt in range(n_retries):
         try:
             torch.save(network, net_path)
-            load_network(team_name)
+            load_network(str(HERE / team_name))
             return
         except Exception:
             if attempt == n_retries - 1:
@@ -92,7 +93,10 @@ class Orientation:
     WEST = 3  # negative x-direction
 
 
-class SnakeEnv:
+REMAP_ORIENTATION = {0: [0, -1], 1: [1, 0], 2: [0, 1], 3: [-1, 0]}
+
+
+class SnakeEnv(gym.Env):
     def __init__(
         self,
         opponent_choose_move: Callable,
@@ -102,16 +106,19 @@ class SnakeEnv:
     ):
         self.opponent_choose_move = opponent_choose_move
         self.render = render
+        print("HI")
         self.verbose = verbose
         self.game_speed_multiplier = game_speed_multiplier
 
         self.action_space = Discrete(3)
-        self.observation_space = Box(low=-1, high=1, shape=(64, 64))
+        # self.observation_space = Box(low=-1, high=1, shape=(64, 64))
+        self.observation_space = Box(low=-1, high=1, shape=(6,))
 
+        self.metadata = ""
         if render:
             self.init_visuals()
 
-    def reset(self):
+    def reset(self) -> None:
         self.snake_direction = random.choice(
             [Orientation.EAST, Orientation.WEST, Orientation.NORTH, Orientation.SOUTH]
         )
@@ -138,7 +145,9 @@ class SnakeEnv:
         )
         self.snake_alive = True
         self.num_steps_taken = 0
-        return self.state, 0, False, {}
+
+        # return self.state, 0, False, {}
+        return self.state
 
     @property
     def done(self) -> bool:
@@ -154,15 +163,21 @@ class SnakeEnv:
         self.food_position = random.choice(possible_food_positions)
 
     def _step(self, action: int) -> int:
+
+        if action is None:
+            return 0
+
+        # AHHHHHHHHHHHHHHH BADDD
+        action += 1
         if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
             raise ValueError(f"Invalid action: {action}")
 
-        if action == Action.MOVE_FORWARD:
-            new_orientation = self.snake_direction
-        elif action == Action.TURN_LEFT:
+        if action == Action.TURN_LEFT:
             new_orientation = (self.snake_direction + 1) % 4
-        else:
+        elif action == Action.TURN_RIGHT:
             new_orientation = (self.snake_direction - 1) % 4
+        else:
+            new_orientation = self.snake_direction
 
         x, y = self.snake_head
         if new_orientation % 2 == 0:
@@ -173,8 +188,11 @@ class SnakeEnv:
             x += 2 - new_orientation
 
         # Update snake position and orientation
-        self.snake_positions.insert(0, (x, y))
-        self.snake_direction = new_orientation
+        if action is not None:
+            self.snake_positions.insert(0, (x, y))
+            self.snake_direction = new_orientation
+
+        self.snake_positions = [self.wrap_position(pos) for pos in self.snake_positions]
 
         # If snake eats apple, don't remove the end of the tail
         if self.snake_head != self.food_position:
@@ -183,19 +201,21 @@ class SnakeEnv:
         else:
             # Generate new apple
             # Placeholder reward
-            reward = 10
+            reward = 1
             self.generate_food()
 
         # If you hit more snake or boundary, game over
-        if self.has_hit_boundaries() or self.has_hit_self():
-            self.snake_alive = False
+        # if self.has_hit_self():
+        #     self.snake_alive = False
+        #     reward = 0
 
         self.num_steps_taken += 1
         if self.verbose and self.num_steps_taken % 1000 == 0:
             print(f"{self.num_steps_taken} steps taken")
 
-        if self.verbose and self.num_steps_taken >= 10000:
-            print("RUN OUT OF TIME!")
+        if self.num_steps_taken >= 10000:
+            if self.verbose:
+                print("RUN OUT OF TIME!")
             self.snake_alive = False
 
         if self.render:
@@ -206,12 +226,22 @@ class SnakeEnv:
     @property
     def state(self) -> np.ndarray:
 
-        # Improve lol
-        a1 = np.array(self.snake_positions).ravel()
-        a2 = np.array([self.snake_direction])
-        a3 = np.array(self.food_position)
+        state = np.zeros(6)
 
-        return np.hstack((a1, a2, a3))
+        snake_pos = (
+            np.array(self.snake_head).ravel() / (ARENA_HEIGHT / 2)
+        ) - 1  # Fix if rectangular
+
+        snake_direction = np.array(REMAP_ORIENTATION[self.snake_direction])
+        food_pos = (np.array(self.food_position) / (ARENA_HEIGHT / 2)) - 1
+
+        state[:2] = snake_direction
+        state[2:4] = food_pos
+
+        state[4 : 4 + len(snake_pos)] = snake_pos
+
+        return np.hstack((snake_pos, snake_direction, food_pos))
+        # return state
 
     def step(self, action: int) -> Tuple:
 
@@ -219,7 +249,8 @@ class SnakeEnv:
 
         if not self.done:
             # reward = self._step(self.opponent_choose_move(state=self.observation))
-            reward = 0
+            # reward = 0
+            pass
         # if self.done:
         #     result = "won" if reward > 0 else "lost"
         #     msg = f"You {result} {abs(reward*2)} chips"
@@ -239,6 +270,12 @@ class SnakeEnv:
         y_boundary_hit = self.snake_head[1] < 0 or self.snake_head[1] >= ARENA_HEIGHT
         x_boundary_hit = self.snake_head[0] < 0 or self.snake_head[0] >= ARENA_WIDTH
         return y_boundary_hit or x_boundary_hit
+
+    def wrap_position(self, pos: Tuple[int, int]) -> Tuple[int, int]:
+        x, y = pos
+        x = ARENA_WIDTH if x < 0 else 0 if x > ARENA_WIDTH else x
+        y = ARENA_HEIGHT if y < 0 else 0 if y > ARENA_HEIGHT else y
+        return (x, y)
 
     def has_hit_self(self) -> bool:
         return self.snake_head in self.snake_body
@@ -263,20 +300,25 @@ class SnakeEnv:
         self.screen.fill(WHITE)
         self.score_font = pygame.font.SysFont("comicsansms", 35)
 
-    def print_state(self):
+    def print_state(self) -> None:
         # Maybe useful
         arena = np.zeros((SCREEN_WIDTH, SCREEN_HEIGHT))
         arena[self.food_position] = 1
-        for pos in self.snake_positions:
+        for new in self.snake_positions:
             try:
-                arena[pos] = 2
+                arena[new] = 2
             except:
                 pass
         print(arena)
         print("\n")
         # time.sleep(0.1)
 
-    def render_game(self):
+    def render_game(self) -> None:
+
+        # Maybe necessary maybe not
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                quit()
 
         self.screen.fill(WHITE)
         # Draw apple
@@ -312,9 +354,7 @@ class SnakeEnv:
         # draw score
         value = self.score_font.render(f"Your score: {self.snake_length - 2}", True, BLACK)
         self.screen.blit(value, [0, 0])
-
         pygame.display.update()
-        # time.sleep(0.5)
 
     # def play_snake(
     #     choose_move: Callable[[List[Tuple[int, int]], Orientation, Tuple[int, int]], Action],
@@ -339,3 +379,24 @@ class SnakeEnv:
     #         clock.tick(round(30 * game_speed_multiplier))
     #     pygame.quit()
     #     print(game.snake_length - 2)
+
+
+def human_player(state) -> Optional[int]:
+    """Controls quite janky."""
+    time.sleep(0.1)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT or (
+            event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
+        ):
+            quit()
+        # elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+        #     return 3
+    is_key_pressed = pygame.key.get_pressed()
+    if is_key_pressed[pygame.K_RIGHT]:
+        return 2
+    elif is_key_pressed[pygame.K_LEFT]:
+        return 1
+    if is_key_pressed[pygame.K_UP]:
+        return 0
+
+    return None
