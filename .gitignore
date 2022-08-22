@@ -15,6 +15,7 @@ team_store/
 *.pkl
 !*winner.pkl
 
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -123,6 +124,7 @@ celerybeat.pid
 .venv
 env/
 venv/
+snake-env/
 ENV/
 env.bak/
 venv.bak/
