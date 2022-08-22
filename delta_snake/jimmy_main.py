@@ -60,7 +60,7 @@ def train() -> nn.Module:
     # model.set_env(env)
     callback = CustomCallback()
     model.learn(
-        total_timesteps=1_000_000,
+        total_timesteps=350_000,
         callback=callback,
     )
     model.save(str(HERE / "howdy_model"))

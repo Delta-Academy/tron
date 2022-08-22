@@ -205,9 +205,9 @@ class SnakeEnv(gym.Env):
             self.generate_food()
 
         # If you hit more snake or boundary, game over
-        # if self.has_hit_self():
-        #     self.snake_alive = False
-        #     reward = 0
+        if self.has_hit_self():
+            self.snake_alive = False
+            reward = 0
 
         self.num_steps_taken += 1
         if self.verbose and self.num_steps_taken % 1000 == 0:
