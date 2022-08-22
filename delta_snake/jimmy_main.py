@@ -53,14 +53,14 @@ def train() -> nn.Module:
     env = SnakeEnv(lambda x: x, verbose=False, render=False)
     env.reset()
 
-    model = PPO("MlpPolicy", env, verbose=2)
+    # model = PPO("MlpPolicy", env, verbose=2, ent_coef=0.01)
 
-    # model = PPO.load(str(HERE / "howdy_model"))
+    model = PPO.load(str(HERE / "howdy_model"))
 
-    # model.set_env(env)
+    model.set_env(env)
     callback = CustomCallback()
     model.learn(
-        total_timesteps=350_000,
+        total_timesteps=500_000,
         callback=callback,
     )
     model.save(str(HERE / "howdy_model"))
@@ -131,5 +131,5 @@ if __name__ == "__main__":
     #     render=True,
     #     verbose=False,
     # )
-    # train()
-    test()
+    train()
+    # test()

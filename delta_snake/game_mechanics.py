@@ -28,6 +28,8 @@ DARK_GREEN = (0, 100, 0)
 
 HERE = Path(__file__).parent.resolve()
 
+MAX_SIZE = 30
+
 
 def load_network(team_name: str, network_folder: Path = HERE) -> nn.Module:
     net_path = network_folder / f"{team_name}_network.pt"
@@ -106,13 +108,12 @@ class SnakeEnv(gym.Env):
     ):
         self.opponent_choose_move = opponent_choose_move
         self.render = render
-        print("HI")
         self.verbose = verbose
         self.game_speed_multiplier = game_speed_multiplier
 
         self.action_space = Discrete(3)
         # self.observation_space = Box(low=-1, high=1, shape=(64, 64))
-        self.observation_space = Box(low=-1, high=1, shape=(6,))
+        self.observation_space = Box(low=-1, high=1, shape=(MAX_SIZE * 2,))
 
         self.metadata = ""
         if render:
@@ -151,7 +152,8 @@ class SnakeEnv(gym.Env):
 
     @property
     def done(self) -> bool:
-        return not self.snake_alive
+        print(self.snake_length)
+        return not self.snake_alive and not self.snake_length >= MAX_SIZE - 6  # hacky approximation
 
     def generate_food(self) -> None:
         possible_food_positions = [
@@ -226,22 +228,21 @@ class SnakeEnv(gym.Env):
     @property
     def state(self) -> np.ndarray:
 
-        state = np.zeros(6)
+        # Rough, cba to figure out exactly right now
+        state = np.zeros(MAX_SIZE * 2)
 
         snake_pos = (
-            np.array(self.snake_head).ravel() / (ARENA_HEIGHT / 2)
+            np.array(self.snake_positions).ravel() / (ARENA_HEIGHT / 2)
         ) - 1  # Fix if rectangular
 
         snake_direction = np.array(REMAP_ORIENTATION[self.snake_direction])
         food_pos = (np.array(self.food_position) / (ARENA_HEIGHT / 2)) - 1
 
-        state[:2] = snake_direction
-        state[2:4] = food_pos
+        state[: len(snake_pos)] = snake_pos
+        state[-4:-2] = snake_direction
+        state[-2:] = food_pos
 
-        state[4 : 4 + len(snake_pos)] = snake_pos
-
-        return np.hstack((snake_pos, snake_direction, food_pos))
-        # return state
+        return state
 
     def step(self, action: int) -> Tuple:
 
