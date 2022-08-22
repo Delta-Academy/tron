@@ -1,11 +1,10 @@
 from typing import Any, Dict
 
 import numpy as np
+from torch import nn
 
 from check_submission import check_submission
-from game_mechanics import Snake, choose_move_randomly, load_network, play_snake, save_network
-
-from torch import nn
+from game_mechanics import SnakeEnv, choose_move_randomly, load_network, play_snake, save_network
 
 TEAM_NAME = "Team Name"  # <---- Enter your team name here!
 assert TEAM_NAME != "Team Name", "Please change your TEAM_NAME!"

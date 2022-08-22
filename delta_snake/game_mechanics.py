@@ -1,10 +1,13 @@
 import enum
-from pathlib import Path
 import random
+import time
+from pathlib import Path
 from typing import Callable, List, Tuple
 
+import numpy as np
 import pygame
 import torch
+from gym.spaces import Box, Discrete
 from torch import nn
 
 ARENA_WIDTH = 80
@@ -66,7 +69,7 @@ def play_snake(
     pass
 
 
-class Action(enum.Enum):
+class Action:
     """The action taken by the snake.
 
     The snake has 3 options:
@@ -80,7 +83,7 @@ class Action(enum.Enum):
     TURN_RIGHT = 3
 
 
-class Orientation(enum.Enum):
+class Orientation:
     """Direction the snake is pointing."""
 
     SOUTH = 0  # negative y-direction
@@ -89,8 +92,26 @@ class Orientation(enum.Enum):
     WEST = 3  # negative x-direction
 
 
-class Snake:
-    def __init__(self):
+class SnakeEnv:
+    def __init__(
+        self,
+        opponent_choose_move: Callable,
+        verbose: bool = False,
+        render: bool = False,
+        game_speed_multiplier: int = 1,
+    ):
+        self.opponent_choose_move = opponent_choose_move
+        self.render = render
+        self.verbose = verbose
+        self.game_speed_multiplier = game_speed_multiplier
+
+        self.action_space = Discrete(3)
+        self.observation_space = Box(low=-1, high=1, shape=(64, 64))
+
+        if render:
+            self.init_visuals()
+
+    def reset(self):
         self.snake_direction = random.choice(
             [Orientation.EAST, Orientation.WEST, Orientation.NORTH, Orientation.SOUTH]
         )
@@ -117,8 +138,13 @@ class Snake:
         )
         self.snake_alive = True
         self.num_steps_taken = 0
+        return self.state, 0, False, {}
 
-    def generate_food(self):
+    @property
+    def done(self) -> bool:
+        return not self.snake_alive
+
+    def generate_food(self) -> None:
         possible_food_positions = [
             (x, y)
             for x in range(ARENA_WIDTH)
@@ -127,23 +153,16 @@ class Snake:
         ]
         self.food_position = random.choice(possible_food_positions)
 
-    def update(
-        self,
-        choose_action: Callable[[List[Tuple[int, int]], Orientation, Tuple[int, int]], Action],
-    ) -> None:
-        try:
-            action = choose_action(self.snake_positions, self.snake_direction, self.food_position)
-            if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
-                raise ValueError(f"Invalid action: {action}")
-        except Exception as e:
-            print(e)
-            action = random.choice([Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT])
-        if action.value == Action.MOVE_FORWARD.value:
-            new_orientation = self.snake_direction.value
-        elif action.value == Action.TURN_LEFT.value:
-            new_orientation = (self.snake_direction.value + 1) % 4
+    def _step(self, action: int) -> int:
+        if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
+            raise ValueError(f"Invalid action: {action}")
+
+        if action == Action.MOVE_FORWARD:
+            new_orientation = self.snake_direction
+        elif action == Action.TURN_LEFT:
+            new_orientation = (self.snake_direction + 1) % 4
         else:
-            new_orientation = (self.snake_direction.value - 1) % 4
+            new_orientation = (self.snake_direction - 1) % 4
 
         x, y = self.snake_head
         if new_orientation % 2 == 0:
@@ -155,13 +174,16 @@ class Snake:
 
         # Update snake position and orientation
         self.snake_positions.insert(0, (x, y))
-        self.snake_direction = Orientation(new_orientation)
+        self.snake_direction = new_orientation
 
         # If snake eats apple, don't remove the end of the tail
         if self.snake_head != self.food_position:
             del self.snake_positions[-1]
+            reward = 0
         else:
             # Generate new apple
+            # Placeholder reward
+            reward = 10
             self.generate_food()
 
         # If you hit more snake or boundary, game over
@@ -169,12 +191,49 @@ class Snake:
             self.snake_alive = False
 
         self.num_steps_taken += 1
-        if self.num_steps_taken % 1000 == 0:
+        if self.verbose and self.num_steps_taken % 1000 == 0:
             print(f"{self.num_steps_taken} steps taken")
 
-        if self.num_steps_taken >= 10000:
+        if self.verbose and self.num_steps_taken >= 10000:
             print("RUN OUT OF TIME!")
             self.snake_alive = False
+
+        if self.render:
+            self.render_game()
+
+        return reward
+
+    @property
+    def state(self) -> np.ndarray:
+
+        # Improve lol
+        a1 = np.array(self.snake_positions).ravel()
+        a2 = np.array([self.snake_direction])
+        a3 = np.array(self.food_position)
+
+        return np.hstack((a1, a2, a3))
+
+    def step(self, action: int) -> Tuple:
+
+        reward = self._step(action)
+
+        if not self.done:
+            # reward = self._step(self.opponent_choose_move(state=self.observation))
+            reward = 0
+        # if self.done:
+        #     result = "won" if reward > 0 else "lost"
+        #     msg = f"You {result} {abs(reward*2)} chips"
+
+        # if self.verbose:
+        #     print(msg)
+        # if self.render:
+        #     self.env.render(
+        #         most_recent_move=self.most_recent_move,
+        #         win_message=msg,
+        #         render_opponent_cards=True,
+        #     )
+
+        return self.state, reward, self.done, {}
 
     def has_hit_boundaries(self) -> bool:
         y_boundary_hit = self.snake_head[1] < 0 or self.snake_head[1] >= ARENA_HEIGHT
@@ -196,65 +255,87 @@ class Snake:
     def snake_body(self) -> List[Tuple[int, int]]:
         return self.snake_positions[1:]
 
+    def init_visuals(self) -> None:
+        pygame.init()
+        self.screen = pygame.display.set_mode((ARENA_WIDTH * BLOCK_SIZE, ARENA_HEIGHT * BLOCK_SIZE))
+        pygame.display.set_caption("Snake Game")
+        self.clock = pygame.time.Clock()
+        self.screen.fill(WHITE)
+        self.score_font = pygame.font.SysFont("comicsansms", 35)
 
-# def play_snake(
-#     choose_move: Callable[[List[Tuple[int, int]], Orientation, Tuple[int, int]], Action],
-#     game_speed_multiplier: float = 1.0,
-# ):
-#     """Play a game of Pong where both paddles are controlled by `move_paddle()`."""
-#     game = Snake()
-#     pygame.init()
-#     screen = pygame.display.set_mode((ARENA_WIDTH * BLOCK_SIZE, ARENA_HEIGHT * BLOCK_SIZE))
-#     pygame.display.set_caption("Snake Game")
-#     clock = pygame.time.Clock()
-#     score_font = pygame.font.SysFont("comicsansms", 35)
+    def print_state(self):
+        # Maybe useful
+        arena = np.zeros((SCREEN_WIDTH, SCREEN_HEIGHT))
+        arena[self.food_position] = 1
+        for pos in self.snake_positions:
+            try:
+                arena[pos] = 2
+            except:
+                pass
+        print(arena)
+        print("\n")
+        # time.sleep(0.1)
 
-#     game_quit = False
-#     while game.snake_alive and not game_quit:
-#         game.update(choose_move)
-#         draw_game(screen, game, score_font)
-#         for event in pygame.event.get():
-#             if event.type == pygame.QUIT:
-#                 game_quit = True
-#                 print("Game quit")
-#         clock.tick(round(30 * game_speed_multiplier))
-#     pygame.quit()
-#     print(game.snake_length - 2)
+    def render_game(self):
 
+        self.screen.fill(WHITE)
+        # Draw apple
+        food_screen_x, food_screen_y = self.food_position
 
-def draw_game(screen, game: Snake, score_font):
-    # White background
-    screen.fill(WHITE)
-
-    # Draw apple
-    food_screen_x, food_screen_y = game.food_position
-    food_screen_y = (
-        ARENA_HEIGHT - food_screen_y - 1
-    )  # Flip y axis because pygame counts 0,0 as top left
-    pygame.draw.rect(
-        screen,
-        GREEN,
-        [food_screen_x * BLOCK_SIZE, food_screen_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
-    )
-
-    # Draw snake
-    for snake_pos in game.snake_body:
-        snake_y = (
-            ARENA_HEIGHT - snake_pos[1] - 1
+        food_screen_y = (
+            ARENA_HEIGHT - food_screen_y - 1
         )  # Flip y axis because pygame counts 0,0 as top left
         pygame.draw.rect(
-            screen, BLACK, [snake_pos[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE]
+            self.screen,
+            GREEN,
+            [food_screen_x * BLOCK_SIZE, food_screen_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
         )
-    # Flip y axis because pygame counts 0,0 as top left
-    snake_y = ARENA_HEIGHT - game.snake_head[1] - 1
-    pygame.draw.rect(
-        screen,
-        DARK_GREEN,
-        [game.snake_head[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
-    )
 
-    # draw score
-    value = score_font.render(f"Your score: {game.snake_length - 2}", True, BLACK)
-    screen.blit(value, [0, 0])
+        # Draw snake
+        for snake_pos in self.snake_body:
+            snake_y = (
+                ARENA_HEIGHT - snake_pos[1] - 1
+            )  # Flip y axis because pygame counts 0,0 as top left
+            pygame.draw.rect(
+                self.screen,
+                BLACK,
+                [snake_pos[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
+            )
+        # Flip y axis because pygame counts 0,0 as top left
+        snake_y = ARENA_HEIGHT - self.snake_head[1] - 1
+        pygame.draw.rect(
+            self.screen,
+            DARK_GREEN,
+            [self.snake_head[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
+        )
 
-    pygame.display.update()
+        # draw score
+        value = self.score_font.render(f"Your score: {self.snake_length - 2}", True, BLACK)
+        self.screen.blit(value, [0, 0])
+
+        pygame.display.update()
+        # time.sleep(0.5)
+
+    # def play_snake(
+    #     choose_move: Callable[[List[Tuple[int, int]], Orientation, Tuple[int, int]], Action],
+    #     game_speed_multiplier: float = 1.0,
+    # ):
+    #     """Play a game of Pong where both paddles are controlled by `move_paddle()`."""
+    #     game = Snake()
+    #     pygame.init()
+    #     screen = pygame.display.set_mode((ARENA_WIDTH * BLOCK_SIZE, ARENA_HEIGHT * BLOCK_SIZE))
+    #     pygame.display.set_caption("Snake Game")
+    #     clock = pygame.time.Clock()
+    #     score_font = pygame.font.SysFont("comicsansms", 35)
+
+    #     game_quit = False
+    #     while game.snake_alive and not game_quit:
+    #         game.update(choose_move)
+    #         draw_game(screen, game, score_font)
+    #         for event in pygame.event.get():
+    #             if event.type == pygame.QUIT:
+    #                 game_quit = True
+    #                 print("Game quit")
+    #         clock.tick(round(30 * game_speed_multiplier))
+    #     pygame.quit()
+    #     print(game.snake_length - 2)
