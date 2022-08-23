@@ -12,8 +12,8 @@ from gym.spaces import Box, Discrete
 from numba import jit
 from torch import nn
 
-ARENA_WIDTH = 5
-ARENA_HEIGHT = 5
+ARENA_WIDTH = 10
+ARENA_HEIGHT = 10
 BLOCK_SIZE = 10
 
 SCREEN_WIDTH = ARENA_WIDTH * BLOCK_SIZE
