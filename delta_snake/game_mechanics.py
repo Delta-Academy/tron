@@ -12,8 +12,11 @@ from gym.spaces import Box, Discrete
 from numba import jit
 from torch import nn
 
-ARENA_WIDTH = 10
-ARENA_HEIGHT = 10
+ARENA_WIDTH = 11
+ARENA_HEIGHT = 11
+
+assert ARENA_WIDTH % 2 != 0, "Need odd sized grid for egocentric view"
+
 BLOCK_SIZE = 10
 
 SCREEN_WIDTH = ARENA_WIDTH * BLOCK_SIZE
@@ -98,6 +101,9 @@ class Orientation:
 
 REMAP_ORIENTATION = {0: [0, -1], 1: [1, 0], 2: [0, 1], 3: [-1, 0]}
 
+# how many orientations for grid to be north from your perspective?
+ORIENTATION_2_ROT = {0: 2, 2: 0, 1: 1, 3: 3}
+
 
 class SnakeEnv(gym.Env):
     def __init__(
@@ -114,9 +120,17 @@ class SnakeEnv(gym.Env):
 
         self.action_space = Discrete(3)
         # self.observation_space = Box(low=-1, high=1, shape=(64, 64))
-        self.observation_space = Box(low=-1, high=1, shape=(ARENA_WIDTH * ARENA_HEIGHT + 2,))
+        # self.observation_space = Box(low=-1, high=1, shape=(ARENA_WIDTH * ARENA_HEIGHT + 2,))
+        # self.observation_space = Box(
+        #     low=0, high=255, shape=(ARENA_WIDTH, ARENA_HEIGHT, 1), dtype=np.uint8
+        # )
+
+        self.observation_space = Box(
+            low=0, high=255, shape=(ARENA_WIDTH, ARENA_HEIGHT, 1), dtype=np.uint8
+        )
 
         self.metadata = ""
+        self.arena = np.zeros((ARENA_WIDTH, ARENA_HEIGHT, 1))
         if render:
             self.init_visuals()
 
@@ -172,8 +186,8 @@ class SnakeEnv(gym.Env):
     # @jit(nopython=True)
     def _step(self, action: int) -> int:
 
-        # if action is None:
-        #     return 0
+        if action is None:
+            return 0
 
         # AHHHHHHHHHHHHHHH BADDD
         action += 1
@@ -238,16 +252,43 @@ class SnakeEnv(gym.Env):
         return dim * pos[0] + pos[1]
 
     @property
-    def state(self) -> List[int]:
+    def state(self) -> np.ndarray:
 
-        arena = [0] * (ARENA_WIDTH * ARENA_HEIGHT)
-        # Will break with non square arena
-        arena[self.idx_to_flat(self.food_position, ARENA_HEIGHT)] = 1
-        arena[self.idx_to_flat(self.snake_head, ARENA_HEIGHT)] = -1
-        for pos in self.snake_positions:
-            arena[self.idx_to_flat(pos, ARENA_HEIGHT)] = -1
-        arena.extend(REMAP_ORIENTATION[self.snake_direction])
-        return arena
+        # arena = [0] * (ARENA_WIDTH * ARENA_HEIGHT)
+        # # Will break with non square arena
+        # arena[self.idx_to_flat(self.food_position, ARENA_HEIGHT)] = 1
+        # arena[self.idx_to_flat(self.snake_head, ARENA_HEIGHT)] = -1
+        # for pos in self.snake_positions:
+        #     arena[self.idx_to_flat(pos, ARENA_HEIGHT)] = -1
+        # return arena
+        self.arena[:] = 0
+
+        # What to subtract to normalise to snake head position
+
+        norm_x = self.snake_head[0] - ARENA_WIDTH // 2
+        norm_y = self.snake_head[1] - ARENA_HEIGHT // 2
+        norm_head = self.wrap_position((self.snake_head[0] - norm_x, self.snake_head[1] - norm_y))
+
+        relative_food_position = self.wrap_position(
+            (self.food_position[0] - norm_x, self.food_position[1] - norm_y)
+        )
+
+        self.arena[relative_food_position] = 10
+        for pos in self.snake_body:
+            norm_pos = self.wrap_position((pos[0] - norm_x, pos[1] - norm_y))
+            self.arena[norm_pos] = 255
+        self.arena[norm_head] = 255
+
+        rotated = np.rot90(self.arena, k=ORIENTATION_2_ROT[self.snake_direction])
+
+        return rotated
+        # return self.arena.ravel()
+        # return np.append(self.arena.ravel(), np.array(REMAP_ORIENTATION[self.snake_direction]))
+
+        # arena.extend(REMAP_ORIENTATION[self.snake_direction])
+        # return arena
+        # return np.zeros((ARENA_WIDTH, ARENA_HEIGHT, 1))
+        # return np.array(arena).reshape(ARENA_WIDTH, ARENA_HEIGHT, 1)
 
     def step(self, action: int) -> Tuple:
 
@@ -279,8 +320,9 @@ class SnakeEnv(gym.Env):
 
     def wrap_position(self, pos: Tuple[int, int]) -> Tuple[int, int]:
         x, y = pos
-        x = ARENA_WIDTH - 1 if x < 0 else 0 if x >= ARENA_WIDTH else x
-        y = ARENA_HEIGHT - 1 if y < 0 else 0 if y >= ARENA_HEIGHT else y
+        # This could easily be wrong
+        x = ARENA_WIDTH + x if x < 0 else x - ARENA_WIDTH if x >= ARENA_WIDTH else x
+        y = ARENA_HEIGHT + y if y < 0 else y - ARENA_HEIGHT if y >= ARENA_HEIGHT else y
         return (x, y)
 
     def has_hit_self(self) -> bool:

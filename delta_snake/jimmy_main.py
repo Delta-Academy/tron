@@ -54,6 +54,7 @@ def train() -> nn.Module:
     env = SnakeEnv(lambda x: x, verbose=False, render=False)
     env.reset()
 
+    # model = PPO("CnnPolicy", env, verbose=2, ent_coef=0.01)
     # model = PPO("MlpPolicy", env, verbose=2, ent_coef=0.01)
 
     model = PPO.load(str(HERE / "howdy_model"))
@@ -61,7 +62,7 @@ def train() -> nn.Module:
 
     callback = CustomCallback()
     model.learn(
-        total_timesteps=300_000,
+        total_timesteps=1_000_000,
         callback=callback,
     )
     model.save(str(HERE / "howdy_model"))
@@ -94,8 +95,9 @@ def test():
     while not done:
 
         # state = state[:6]
-        action = model.predict(state)[0]
+        action = model.predict(state.copy())[0]
         # action = human_player(state)
+        # action = np.random.randint(3)
         state, reward, done, _ = env.step(action)
         rewards += reward
 
@@ -105,7 +107,7 @@ def test():
 def n_games():
 
     env = SnakeEnv(lambda x: x, verbose=False, render=False)
-    n = 1000
+    n = 100
     n_steps_list = []
 
     for _ in tqdm(range(n)):
@@ -148,7 +150,7 @@ if __name__ == "__main__":
     #     This converts choose_move() to that format.
     #     """
     #     return choose_move(state, my_value_fn)
-
+    #
     # play_snake(
     #     your_choose_move=choose_move_no_network,
     #     opponent_choose_move=choose_move_randomly,
