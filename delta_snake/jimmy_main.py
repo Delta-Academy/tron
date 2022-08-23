@@ -1,3 +1,4 @@
+import cProfile
 import time
 from typing import Any, Dict
 
@@ -53,20 +54,19 @@ def train() -> nn.Module:
     env = SnakeEnv(lambda x: x, verbose=False, render=False)
     env.reset()
 
-    # model = PPO("MlpPolicy", env, verbose=2, ent_coef=0.01)
+    model = PPO("MlpPolicy", env, verbose=2, ent_coef=0.01)
 
-    model = PPO.load(str(HERE / "howdy_model"))
+    # model = PPO.load(str(HERE / "howdy_model"))
+    # model.set_env(env)
 
-    model.set_env(env)
     callback = CustomCallback()
     model.learn(
-        total_timesteps=500_000,
+        total_timesteps=300_000,
         callback=callback,
     )
     model.save(str(HERE / "howdy_model"))
     plt.plot(smooth_trace(callback.rewards, 1_000))
     plt.title(f"mean: {np.nanmean(callback.rewards)}, std: {np.nanstd(callback.rewards)}")
-    plt.axhline(0)
     plt.show()
 
 
@@ -85,11 +85,11 @@ def choose_move(state: np.ndarray, network: Any) -> int:
 def test():
 
     env = SnakeEnv(lambda x: x, verbose=False, render=True)
-    t1 = time.time()
 
     state = env.reset()
     done = False
     model = PPO.load(str(HERE / "howdy_model"))
+    rewards = 0
 
     while not done:
 
@@ -97,12 +97,37 @@ def test():
         action = model.predict(state)[0]
         # action = human_player(state)
         state, reward, done, _ = env.step(action)
+        rewards += reward
 
-    t2 = time.time()
-    print(t2 - t1)
+    print(f"score = {rewards}")
+
+
+def n_games():
+
+    env = SnakeEnv(lambda x: x, verbose=False, render=False)
+    n = 1000
+    n_steps_list = []
+
+    for _ in tqdm(range(n)):
+
+        state = env.reset()
+        done = False
+        n_steps = 0
+
+        while not done:
+
+            action = np.random.randint(3)
+            state, reward, done, _ = env.step(action)
+            n_steps += 1
+        n_steps_list.append(n_steps)
+
+    print(f"n steps = {np.mean(n_steps_list)}")
 
 
 if __name__ == "__main__":
+
+    # cProfile.run("n_games()", "profile.prof")
+    # n_games()
 
     # ## Example workflow, feel free to edit this! ###
     # network = train()
@@ -131,5 +156,5 @@ if __name__ == "__main__":
     #     render=True,
     #     verbose=False,
     # )
-    train()
-    # test()
+    # train()
+    test()

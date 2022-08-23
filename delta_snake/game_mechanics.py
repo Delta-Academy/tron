@@ -9,10 +9,11 @@ import gym
 import pygame
 import torch
 from gym.spaces import Box, Discrete
+from numba import jit
 from torch import nn
 
-ARENA_WIDTH = 30
-ARENA_HEIGHT = 30
+ARENA_WIDTH = 5
+ARENA_HEIGHT = 5
 BLOCK_SIZE = 10
 
 SCREEN_WIDTH = ARENA_WIDTH * BLOCK_SIZE
@@ -113,13 +114,13 @@ class SnakeEnv(gym.Env):
 
         self.action_space = Discrete(3)
         # self.observation_space = Box(low=-1, high=1, shape=(64, 64))
-        self.observation_space = Box(low=-1, high=1, shape=(MAX_SIZE * 2,))
+        self.observation_space = Box(low=-1, high=1, shape=(ARENA_WIDTH * ARENA_HEIGHT + 2,))
 
         self.metadata = ""
         if render:
             self.init_visuals()
 
-    def reset(self) -> None:
+    def reset(self) -> List[int]:
         self.snake_direction = random.choice(
             [Orientation.EAST, Orientation.WEST, Orientation.NORTH, Orientation.SOUTH]
         )
@@ -152,8 +153,11 @@ class SnakeEnv(gym.Env):
 
     @property
     def done(self) -> bool:
-        print(self.snake_length)
-        return not self.snake_alive and not self.snake_length >= MAX_SIZE - 6  # hacky approximation
+
+        # Make better
+        if not self.snake_alive:
+            return True
+        return False
 
     def generate_food(self) -> None:
         possible_food_positions = [
@@ -164,19 +168,22 @@ class SnakeEnv(gym.Env):
         ]
         self.food_position = random.choice(possible_food_positions)
 
+    # @jit
+    # @jit(nopython=True)
     def _step(self, action: int) -> int:
 
-        if action is None:
-            return 0
+        # if action is None:
+        #     return 0
 
         # AHHHHHHHHHHHHHHH BADDD
         action += 1
-        if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
-            raise ValueError(f"Invalid action: {action}")
 
-        if action == Action.TURN_LEFT:
+        # if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
+        #     raise ValueError(f"Invalid action: {action}")
+
+        if action == 2:
             new_orientation = (self.snake_direction + 1) % 4
-        elif action == Action.TURN_RIGHT:
+        elif action == 3:
             new_orientation = (self.snake_direction - 1) % 4
         else:
             new_orientation = self.snake_direction
@@ -225,24 +232,20 @@ class SnakeEnv(gym.Env):
 
         return reward
 
+    @staticmethod
+    def idx_to_flat(pos: Tuple[int, int], dim: int) -> int:
+        """idx of a matrix to its position in the flattened vector."""
+        return dim * pos[0] + pos[1]
+
     @property
-    def state(self) -> np.ndarray:
+    def state(self) -> List[int]:
 
-        # Rough, cba to figure out exactly right now
-        state = np.zeros(MAX_SIZE * 2)
-
-        snake_pos = (
-            np.array(self.snake_positions).ravel() / (ARENA_HEIGHT / 2)
-        ) - 1  # Fix if rectangular
-
-        snake_direction = np.array(REMAP_ORIENTATION[self.snake_direction])
-        food_pos = (np.array(self.food_position) / (ARENA_HEIGHT / 2)) - 1
-
-        state[: len(snake_pos)] = snake_pos
-        state[-4:-2] = snake_direction
-        state[-2:] = food_pos
-
-        return state
+        arena = [0] * (ARENA_WIDTH * ARENA_HEIGHT)
+        # Will break with non square arena
+        arena[self.idx_to_flat(self.food_position, ARENA_HEIGHT)] = 1
+        arena[self.idx_to_flat(self.snake_head, ARENA_HEIGHT)] = -1
+        arena.extend(REMAP_ORIENTATION[self.snake_direction])
+        return arena
 
     def step(self, action: int) -> Tuple:
 
@@ -274,8 +277,8 @@ class SnakeEnv(gym.Env):
 
     def wrap_position(self, pos: Tuple[int, int]) -> Tuple[int, int]:
         x, y = pos
-        x = ARENA_WIDTH if x < 0 else 0 if x > ARENA_WIDTH else x
-        y = ARENA_HEIGHT if y < 0 else 0 if y > ARENA_HEIGHT else y
+        x = ARENA_WIDTH - 1 if x < 0 else 0 if x >= ARENA_WIDTH else x
+        y = ARENA_HEIGHT - 1 if y < 0 else 0 if y >= ARENA_HEIGHT else y
         return (x, y)
 
     def has_hit_self(self) -> bool:
