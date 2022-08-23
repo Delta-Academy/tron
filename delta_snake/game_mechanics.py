@@ -244,6 +244,8 @@ class SnakeEnv(gym.Env):
         # Will break with non square arena
         arena[self.idx_to_flat(self.food_position, ARENA_HEIGHT)] = 1
         arena[self.idx_to_flat(self.snake_head, ARENA_HEIGHT)] = -1
+        for pos in self.snake_positions:
+            arena[self.idx_to_flat(pos, ARENA_HEIGHT)] = -1
         arena.extend(REMAP_ORIENTATION[self.snake_direction])
         return arena
 
