@@ -157,10 +157,19 @@ if __name__ == "__main__":
     def choose_move_model(state) -> int:
         return model.predict(state.copy())[0] + 1
 
+    # play_snake(
+    #     your_choose_move=choose_move_model,
+    #     opponent_choose_moves=[choose_move_model] * 3,
+    #     game_speed_multiplier=0.1,
+    #     render=True,
+    #     verbose=False,
+    # )
+
     play_snake(
-        your_choose_move=choose_move_model,
-        opponent_choose_moves=[choose_move_model] * 3,
-        game_speed_multiplier=0.1,
+        your_choose_move=human_player,
+        # opponent_choose_moves=[choose_move_model] * 1,
+        opponent_choose_moves=[lambda x: 1] * 1,
+        game_speed_multiplier=5,
         render=True,
         verbose=False,
     )
