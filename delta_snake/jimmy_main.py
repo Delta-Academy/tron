@@ -51,7 +51,7 @@ def train() -> nn.Module:
 
     Returns:
     """
-    env = SnakeEnv(lambda x: x, verbose=False, render=False)
+    env = SnakeEnv([lambda x: x], verbose=False, render=False)
     env.reset()
 
     # model = PPO("CnnPolicy", env, verbose=2, ent_coef=0.01)
@@ -151,12 +151,12 @@ if __name__ == "__main__":
     #     """
     #     return choose_move(state, my_value_fn)
     #
-    # play_snake(
-    #     your_choose_move=choose_move_no_network,
-    #     opponent_choose_move=choose_move_randomly,
-    #     game_speed_multiplier=1,
-    #     render=True,
-    #     verbose=False,
-    # )
+    play_snake(
+        your_choose_move=choose_move_randomly,
+        opponent_choose_moves=[choose_move_randomly] * 10,
+        game_speed_multiplier=1,
+        render=True,
+        verbose=False,
+    )
     # train()
-    test()
+    # test()

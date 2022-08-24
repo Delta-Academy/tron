@@ -70,12 +70,18 @@ def choose_move_randomly(state):
 
 def play_snake(
     your_choose_move: Callable,
-    opponent_choose_move: Callable,
+    opponent_choose_moves: List[Callable],
     game_speed_multiplier=1,
     render=True,
     verbose=False,
 ) -> None:
-    pass
+    env = SnakeEnv(opponent_choose_moves=opponent_choose_moves, verbose=False, render=True)
+    state = env.reset()
+    done = False
+    while not done:
+        action = your_choose_move(state)
+
+        state, reward, done, _ = env.step(action)
 
 
 def wrap_position(pos: Tuple[int, int]) -> Tuple[int, int]:
@@ -157,7 +163,8 @@ class Snake:
     def snake_body(self) -> List[Tuple[int, int]]:
         return self.snake_positions[1:]
 
-    def take_action(self, action: int):
+    def take_action(self, action: int) -> None:
+
         if action == 2:
             new_orientation = (self.snake_direction + 1) % 4
         elif action == 3:
@@ -187,13 +194,13 @@ class Snake:
 class SnakeEnv(gym.Env):
     def __init__(
         self,
-        opponent_choose_move: Callable,
+        opponent_choose_moves: List[Callable],
         verbose: bool = False,
         render: bool = False,
         game_speed_multiplier: int = 1,
     ):
-        self.opponent_choose_move = opponent_choose_move
-        self.render = render
+        self.opponent_choose_moves = opponent_choose_moves
+        self._render = render
         self.verbose = verbose
         self.game_speed_multiplier = game_speed_multiplier
 
@@ -205,58 +212,61 @@ class SnakeEnv(gym.Env):
 
         self.metadata = ""
         self.arena = np.zeros((ARENA_WIDTH, ARENA_HEIGHT, 1))
-        if render:
+        if self._render:
             self.init_visuals()
 
-    def reset(self) -> List[int]:
+    def reset(self) -> np.ndarray:
         self.food_position = (
             random.randint(0, ARENA_WIDTH - 1),
             random.randint(0, ARENA_HEIGHT - 1),
         )
         self.num_steps_taken = 0
-        self.snake = Snake()
+        # Currently player snake is just stored as the first element of the
+        # overall snakes list. Maybe just separate variable?
+        self.snakes = [Snake() for _ in range(len(self.opponent_choose_moves) + 1)]
 
         # return self.state, 0, False, {}
-        return self.state
+        return self.get_snake_state(self.snakes[0])
 
     @property
     def done(self) -> bool:
-        return not self.snake.alive
+        return not [snake.alive for snake in self.snakes]
 
     def generate_food(self) -> None:
         possible_food_positions = [
             (x, y)
             for x in range(ARENA_WIDTH)
             for y in range(ARENA_HEIGHT)
-            if (x, y) not in self.snake.snake_positions
+            if (x, y) not in [snake.snake_positions for snake in self.snakes]
         ]
         self.food_position = random.choice(possible_food_positions)
 
     # @jit
     # @jit(nopython=True)
-    def _step(self, action: int) -> int:
+    def _step(self, action: int, snake: Snake) -> int:
 
         if action is None:
             return 0
 
         # AHHHHHHHHHHHHHHH BADDD
-        action += 1
-        self.snake.take_action(action)
+        # action += 1
+        snake.take_action(action)
 
         if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
             raise ValueError(f"Invalid action: {action}")
 
         # Remove end of tail unless food eaten
-        if self.snake.snake_head != self.food_position:
+        if snake.snake_head != self.food_position:
             reward = 0
-            self.snake.remove_tail_end()
+            snake.remove_tail_end()
         else:
             reward = 1
             self.generate_food()
 
         # If you hit more snake, game over
-        if self.snake.has_hit_self():
-            self.snake.kill_snake()
+        # TODO: snakes crashing into each other
+        if snake.has_hit_self():
+            snake.kill_snake()
             reward = 0
 
         self.num_steps_taken += 1
@@ -266,10 +276,7 @@ class SnakeEnv(gym.Env):
         if self.num_steps_taken >= MAX_STEPS:
             if self.verbose:
                 print("RUN OUT OF TIME!")
-            self.snake.kill_snake()
-
-        if self.render:
-            self.render_game()
+            snake.kill_snake()
 
         return reward
 
@@ -278,38 +285,43 @@ class SnakeEnv(gym.Env):
         """idx of a matrix to its position in the flattened vector."""
         return dim * pos[0] + pos[1]
 
-    @property
-    def state(self) -> np.ndarray:
+    def get_snake_state(self, snake: Snake) -> np.ndarray:
+        """Get egocentric positioning for a single snake."""
 
         self.arena[:] = 0
 
         #  Subtract to normalise to snake head position
-        norm_x = self.snake.snake_head[0] - ARENA_WIDTH // 2
-        norm_y = self.snake.snake_head[1] - ARENA_HEIGHT // 2
-        norm_head = wrap_position(
-            (self.snake.snake_head[0] - norm_x, self.snake.snake_head[1] - norm_y)
-        )
+        norm_x = snake.snake_head[0] - ARENA_WIDTH // 2
+        norm_y = snake.snake_head[1] - ARENA_HEIGHT // 2
+        norm_head = wrap_position((snake.snake_head[0] - norm_x, snake.snake_head[1] - norm_y))
 
         relative_food_position = wrap_position(
             (self.food_position[0] - norm_x, self.food_position[1] - norm_y)
         )
 
         self.arena[relative_food_position] = 10
-        for pos in self.snake.snake_body:
+        for pos in snake.snake_body:
             norm_pos = wrap_position((pos[0] - norm_x, pos[1] - norm_y))
             self.arena[norm_pos] = 255
         self.arena[norm_head] = 255
 
-        return np.rot90(self.arena, k=ORIENTATION_2_ROT[self.snake.snake_direction])
+        return np.rot90(self.arena, k=ORIENTATION_2_ROT[snake.snake_direction])
 
     def step(self, action: int) -> Tuple:
 
-        reward = self._step(action)
+        # Step player's snake
+        reward = self._step(action, self.snakes[0])
 
-        if not self.done:
-            # reward = self._step(self.opponent_choose_move(state=self.observation))
-            # reward = 0
-            pass
+        assert len(self.snakes) == len(self.opponent_choose_moves) + 1
+        for snake, choose_move in zip(self.snakes[1:], self.opponent_choose_moves):
+            if not self.done:
+                snake_state = self.get_snake_state(snake)
+                action = choose_move(snake_state)
+                reward = self._step(action, snake)
+                reward = 0
+
+        if self._render:
+            self.render_game()
         # if self.done:
         #     result = "won" if reward > 0 else "lost"
         #     msg = f"You {result} {abs(reward*2)} chips"
@@ -323,7 +335,7 @@ class SnakeEnv(gym.Env):
         #         render_opponent_cards=True,
         #     )
 
-        return self.state, reward, self.done, {}
+        return self.get_snake_state(self.snakes[0]), reward, self.done, {}
 
     def has_hit_boundaries(self) -> bool:
         y_boundary_hit = self.snake_head[1] < 0 or self.snake_head[1] >= ARENA_HEIGHT
@@ -372,25 +384,35 @@ class SnakeEnv(gym.Env):
         )
 
         # Draw snake
-        for snake_pos in self.snake.snake_body:
-            snake_y = (
-                ARENA_HEIGHT - snake_pos[1] - 1
-            )  # Flip y axis because pygame counts 0,0 as top left
+        for idx, snake in enumerate(self.snakes):
+            color = BLUE if idx == 0 else BLACK
+
+            for snake_pos in snake.snake_body:
+                snake_y = (
+                    ARENA_HEIGHT - snake_pos[1] - 1
+                )  # Flip y axis because pygame counts 0,0 as top left
+                pygame.draw.rect(
+                    self.screen,
+                    color,
+                    [snake_pos[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
+                )
+            # Flip y axis because pygame counts 0,0 as top left
+            snake_y = ARENA_HEIGHT - snake.snake_head[1] - 1
             pygame.draw.rect(
                 self.screen,
-                BLACK,
-                [snake_pos[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
+                DARK_GREEN,
+                [
+                    snake.snake_head[0] * BLOCK_SIZE,
+                    snake_y * BLOCK_SIZE,
+                    BLOCK_SIZE,
+                    BLOCK_SIZE,
+                ],
             )
-        # Flip y axis because pygame counts 0,0 as top left
-        snake_y = ARENA_HEIGHT - self.snake.snake_head[1] - 1
-        pygame.draw.rect(
-            self.screen,
-            DARK_GREEN,
-            [self.snake.snake_head[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
-        )
 
         # draw score
-        value = self.score_font.render(f"Your score: {self.snake.snake_length - 2}", True, BLACK)
+        value = self.score_font.render(
+            f"Your score: {self.snakes[0].snake_length - 2}", True, BLACK
+        )
         self.screen.blit(value, [0, 0])
         pygame.display.update()
 
