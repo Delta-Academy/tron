@@ -151,8 +151,14 @@ if __name__ == "__main__":
     #     """
     #     return choose_move(state, my_value_fn)
     #
+
+    model = PPO.load(str(HERE / "howdy_model"))
+
+    def choose_move_model(state) -> int:
+        return model.predict(state.copy())[0] + 1
+
     play_snake(
-        your_choose_move=choose_move_randomly,
+        your_choose_move=choose_move_model,
         opponent_choose_moves=[choose_move_randomly] * 10,
         game_speed_multiplier=1,
         render=True,
