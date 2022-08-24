@@ -62,7 +62,7 @@ def train() -> nn.Module:
 
     callback = CustomCallback()
     model.learn(
-        total_timesteps=500_000,
+        total_timesteps=1_000_000,
         callback=callback,
     )
     model.save(str(HERE / "howdy_model"))
@@ -158,5 +158,5 @@ if __name__ == "__main__":
     #     render=True,
     #     verbose=False,
     # )
-    train()
-    # test()
+    # train()
+    test()

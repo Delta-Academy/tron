@@ -78,6 +78,14 @@ def play_snake(
     pass
 
 
+def wrap_position(pos: Tuple[int, int]) -> Tuple[int, int]:
+    x, y = pos
+    # This could easily be wrong
+    x = ARENA_WIDTH + x if x < 0 else x - ARENA_WIDTH if x >= ARENA_WIDTH else x
+    y = ARENA_HEIGHT + y if y < 0 else y - ARENA_HEIGHT if y >= ARENA_HEIGHT else y
+    return (x, y)
+
+
 class Action:
     """The action taken by the snake.
 
@@ -107,36 +115,8 @@ REMAP_ORIENTATION = {0: [0, -1], 1: [1, 0], 2: [0, 1], 3: [-1, 0]}
 ORIENTATION_2_ROT = {0: 2, 2: 0, 1: 1, 3: 3}
 
 
-class SnakeEnv(gym.Env):
-    def __init__(
-        self,
-        opponent_choose_move: Callable,
-        verbose: bool = False,
-        render: bool = False,
-        game_speed_multiplier: int = 1,
-    ):
-        self.opponent_choose_move = opponent_choose_move
-        self.render = render
-        self.verbose = verbose
-        self.game_speed_multiplier = game_speed_multiplier
-
-        self.action_space = Discrete(3)
-        # self.observation_space = Box(low=-1, high=1, shape=(64, 64))
-        # self.observation_space = Box(low=-1, high=1, shape=(ARENA_WIDTH * ARENA_HEIGHT + 2,))
-        # self.observation_space = Box(
-        #     low=0, high=255, shape=(ARENA_WIDTH, ARENA_HEIGHT, 1), dtype=np.uint8
-        # )
-
-        self.observation_space = Box(
-            low=0, high=255, shape=(ARENA_WIDTH, ARENA_HEIGHT, 1), dtype=np.uint8
-        )
-
-        self.metadata = ""
-        self.arena = np.zeros((ARENA_WIDTH, ARENA_HEIGHT, 1))
-        if render:
-            self.init_visuals()
-
-    def reset(self) -> List[int]:
+class Snake:
+    def __init__(self) -> None:
         self.snake_direction = random.choice(
             [Orientation.EAST, Orientation.WEST, Orientation.NORTH, Orientation.SOUTH]
         )
@@ -157,46 +137,27 @@ class SnakeEnv(gym.Env):
             else snake_head_y
         )
         self.snake_positions = [(snake_head_x, snake_head_y), (snake_tail_x, snake_tail_y)]
-        self.food_position = (
-            random.randint(0, ARENA_WIDTH - 1),
-            random.randint(0, ARENA_HEIGHT - 1),
-        )
-        self.snake_alive = True
-        self.num_steps_taken = 0
+        self.alive = True
 
-        # return self.state, 0, False, {}
-        return self.state
+    def kill_snake(self) -> None:
+        self.alive = False
+
+    def has_hit_self(self) -> bool:
+        return self.snake_head in self.snake_body
 
     @property
-    def done(self) -> bool:
+    def snake_length(self) -> int:
+        return len(self.snake_positions)
 
-        # Make better
-        if not self.snake_alive:
-            return True
-        return False
+    @property
+    def snake_head(self) -> Tuple[int, int]:
+        return self.snake_positions[0]
 
-    def generate_food(self) -> None:
-        possible_food_positions = [
-            (x, y)
-            for x in range(ARENA_WIDTH)
-            for y in range(ARENA_HEIGHT)
-            if (x, y) not in self.snake_positions
-        ]
-        self.food_position = random.choice(possible_food_positions)
+    @property
+    def snake_body(self) -> List[Tuple[int, int]]:
+        return self.snake_positions[1:]
 
-    # @jit
-    # @jit(nopython=True)
-    def _step(self, action: int) -> int:
-
-        if action is None:
-            return 0
-
-        # AHHHHHHHHHHHHHHH BADDD
-        action += 1
-
-        # if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
-        #     raise ValueError(f"Invalid action: {action}")
-
+    def take_action(self, action: int):
         if action == 2:
             new_orientation = (self.snake_direction + 1) % 4
         elif action == 3:
@@ -212,26 +173,94 @@ class SnakeEnv(gym.Env):
             # East is 1 (x += 1), West is 3 (x -= 1)
             x += 2 - new_orientation
 
-        # Update snake position and orientation
+        # Update position and orientation
         if action is not None:
             self.snake_positions.insert(0, (x, y))
             self.snake_direction = new_orientation
 
-        self.snake_positions = [self.wrap_position(pos) for pos in self.snake_positions]
+        self.snake_positions = [wrap_position(pos) for pos in self.snake_positions]
 
-        # If snake eats apple, don't remove the end of the tail
-        if self.snake_head != self.food_position:
-            del self.snake_positions[-1]
+    def remove_tail_end(self) -> None:
+        del self.snake_positions[-1]
+
+
+class SnakeEnv(gym.Env):
+    def __init__(
+        self,
+        opponent_choose_move: Callable,
+        verbose: bool = False,
+        render: bool = False,
+        game_speed_multiplier: int = 1,
+    ):
+        self.opponent_choose_move = opponent_choose_move
+        self.render = render
+        self.verbose = verbose
+        self.game_speed_multiplier = game_speed_multiplier
+
+        self.action_space = Discrete(3)
+
+        self.observation_space = Box(
+            low=0, high=255, shape=(ARENA_WIDTH, ARENA_HEIGHT, 1), dtype=np.uint8
+        )
+
+        self.metadata = ""
+        self.arena = np.zeros((ARENA_WIDTH, ARENA_HEIGHT, 1))
+        if render:
+            self.init_visuals()
+
+    def reset(self) -> List[int]:
+        self.food_position = (
+            random.randint(0, ARENA_WIDTH - 1),
+            random.randint(0, ARENA_HEIGHT - 1),
+        )
+        self.num_steps_taken = 0
+        self.snake = Snake()
+
+        # return self.state, 0, False, {}
+        return self.state
+
+    @property
+    def done(self) -> bool:
+
+        # Make better
+        if not self.snake.alive:
+            return True
+        return False
+
+    def generate_food(self) -> None:
+        possible_food_positions = [
+            (x, y)
+            for x in range(ARENA_WIDTH)
+            for y in range(ARENA_HEIGHT)
+            if (x, y) not in self.snake.snake_positions
+        ]
+        self.food_position = random.choice(possible_food_positions)
+
+    # @jit
+    # @jit(nopython=True)
+    def _step(self, action: int) -> int:
+
+        if action is None:
+            return 0
+
+        # AHHHHHHHHHHHHHHH BADDD
+        action += 1
+        self.snake.take_action(action)
+
+        if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
+            raise ValueError(f"Invalid action: {action}")
+
+        # Remove end of tail unless food eaten
+        if self.snake.snake_head != self.food_position:
             reward = 0
+            self.snake.remove_tail_end()
         else:
-            # Generate new apple
-            # Placeholder reward
             reward = 1
             self.generate_food()
 
-        # If you hit more snake or boundary, game over
-        if self.has_hit_self():
-            self.snake_alive = False
+        # If you hit more snake, game over
+        if self.snake.has_hit_self():
+            self.snake.kill_snake()
             reward = 0
 
         self.num_steps_taken += 1
@@ -241,7 +270,7 @@ class SnakeEnv(gym.Env):
         if self.num_steps_taken >= MAX_STEPS:
             if self.verbose:
                 print("RUN OUT OF TIME!")
-            self.snake_alive = False
+            self.snake.kill_snake()
 
         if self.render:
             self.render_game()
@@ -256,41 +285,28 @@ class SnakeEnv(gym.Env):
     @property
     def state(self) -> np.ndarray:
 
-        # arena = [0] * (ARENA_WIDTH * ARENA_HEIGHT)
-        # # Will break with non square arena
-        # arena[self.idx_to_flat(self.food_position, ARENA_HEIGHT)] = 1
-        # arena[self.idx_to_flat(self.snake_head, ARENA_HEIGHT)] = -1
-        # for pos in self.snake_positions:
-        #     arena[self.idx_to_flat(pos, ARENA_HEIGHT)] = -1
-        # return arena
         self.arena[:] = 0
 
-        # What to subtract to normalise to snake head position
+        #  Subtract to normalise to snake head position
+        norm_x = self.snake.snake_head[0] - ARENA_WIDTH // 2
+        norm_y = self.snake.snake_head[1] - ARENA_HEIGHT // 2
+        norm_head = wrap_position(
+            (self.snake.snake_head[0] - norm_x, self.snake.snake_head[1] - norm_y)
+        )
 
-        norm_x = self.snake_head[0] - ARENA_WIDTH // 2
-        norm_y = self.snake_head[1] - ARENA_HEIGHT // 2
-        norm_head = self.wrap_position((self.snake_head[0] - norm_x, self.snake_head[1] - norm_y))
-
-        relative_food_position = self.wrap_position(
+        relative_food_position = wrap_position(
             (self.food_position[0] - norm_x, self.food_position[1] - norm_y)
         )
 
         self.arena[relative_food_position] = 10
-        for pos in self.snake_body:
-            norm_pos = self.wrap_position((pos[0] - norm_x, pos[1] - norm_y))
+        for pos in self.snake.snake_body:
+            norm_pos = wrap_position((pos[0] - norm_x, pos[1] - norm_y))
             self.arena[norm_pos] = 255
         self.arena[norm_head] = 255
 
-        rotated = np.rot90(self.arena, k=ORIENTATION_2_ROT[self.snake_direction])
+        rotated = np.rot90(self.arena, k=ORIENTATION_2_ROT[self.snake.snake_direction])
 
         return rotated
-        # return self.arena.ravel()
-        # return np.append(self.arena.ravel(), np.array(REMAP_ORIENTATION[self.snake_direction]))
-
-        # arena.extend(REMAP_ORIENTATION[self.snake_direction])
-        # return arena
-        # return np.zeros((ARENA_WIDTH, ARENA_HEIGHT, 1))
-        # return np.array(arena).reshape(ARENA_WIDTH, ARENA_HEIGHT, 1)
 
     def step(self, action: int) -> Tuple:
 
@@ -319,28 +335,6 @@ class SnakeEnv(gym.Env):
         y_boundary_hit = self.snake_head[1] < 0 or self.snake_head[1] >= ARENA_HEIGHT
         x_boundary_hit = self.snake_head[0] < 0 or self.snake_head[0] >= ARENA_WIDTH
         return y_boundary_hit or x_boundary_hit
-
-    def wrap_position(self, pos: Tuple[int, int]) -> Tuple[int, int]:
-        x, y = pos
-        # This could easily be wrong
-        x = ARENA_WIDTH + x if x < 0 else x - ARENA_WIDTH if x >= ARENA_WIDTH else x
-        y = ARENA_HEIGHT + y if y < 0 else y - ARENA_HEIGHT if y >= ARENA_HEIGHT else y
-        return (x, y)
-
-    def has_hit_self(self) -> bool:
-        return self.snake_head in self.snake_body
-
-    @property
-    def snake_length(self) -> int:
-        return len(self.snake_positions)
-
-    @property
-    def snake_head(self) -> Tuple[int, int]:
-        return self.snake_positions[0]
-
-    @property
-    def snake_body(self) -> List[Tuple[int, int]]:
-        return self.snake_positions[1:]
 
     def init_visuals(self) -> None:
         pygame.init()
@@ -384,7 +378,7 @@ class SnakeEnv(gym.Env):
         )
 
         # Draw snake
-        for snake_pos in self.snake_body:
+        for snake_pos in self.snake.snake_body:
             snake_y = (
                 ARENA_HEIGHT - snake_pos[1] - 1
             )  # Flip y axis because pygame counts 0,0 as top left
@@ -394,41 +388,17 @@ class SnakeEnv(gym.Env):
                 [snake_pos[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
             )
         # Flip y axis because pygame counts 0,0 as top left
-        snake_y = ARENA_HEIGHT - self.snake_head[1] - 1
+        snake_y = ARENA_HEIGHT - self.snake.snake_head[1] - 1
         pygame.draw.rect(
             self.screen,
             DARK_GREEN,
-            [self.snake_head[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
+            [self.snake.snake_head[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
         )
 
         # draw score
-        value = self.score_font.render(f"Your score: {self.snake_length - 2}", True, BLACK)
+        value = self.score_font.render(f"Your score: {self.snake.snake_length - 2}", True, BLACK)
         self.screen.blit(value, [0, 0])
         pygame.display.update()
-
-    # def play_snake(
-    #     choose_move: Callable[[List[Tuple[int, int]], Orientation, Tuple[int, int]], Action],
-    #     game_speed_multiplier: float = 1.0,
-    # ):
-    #     """Play a game of Pong where both paddles are controlled by `move_paddle()`."""
-    #     game = Snake()
-    #     pygame.init()
-    #     screen = pygame.display.set_mode((ARENA_WIDTH * BLOCK_SIZE, ARENA_HEIGHT * BLOCK_SIZE))
-    #     pygame.display.set_caption("Snake Game")
-    #     clock = pygame.time.Clock()
-    #     score_font = pygame.font.SysFont("comicsansms", 35)
-
-    #     game_quit = False
-    #     while game.snake_alive and not game_quit:
-    #         game.update(choose_move)
-    #         draw_game(screen, game, score_font)
-    #         for event in pygame.event.get():
-    #             if event.type == pygame.QUIT:
-    #                 game_quit = True
-    #                 print("Game quit")
-    #         clock.tick(round(30 * game_speed_multiplier))
-    #     pygame.quit()
-    #     print(game.snake_length - 2)
 
 
 def human_player(state) -> Optional[int]:
