@@ -159,8 +159,8 @@ if __name__ == "__main__":
 
     play_snake(
         your_choose_move=choose_move_model,
-        opponent_choose_moves=[choose_move_randomly] * 10,
-        game_speed_multiplier=1,
+        opponent_choose_moves=[choose_move_model] * 3,
+        game_speed_multiplier=10,
         render=True,
         verbose=False,
     )

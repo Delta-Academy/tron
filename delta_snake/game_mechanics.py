@@ -82,6 +82,7 @@ def play_snake(
         action = your_choose_move(state)
 
         state, reward, done, _ = env.step(action)
+        time.sleep(1 / game_speed_multiplier)
 
 
 def wrap_position(pos: Tuple[int, int]) -> Tuple[int, int]:
@@ -122,7 +123,7 @@ ORIENTATION_2_ROT = {0: 2, 2: 0, 1: 1, 3: 3}
 
 
 class Snake:
-    def __init__(self) -> None:
+    def __init__(self, name: str = "snek") -> None:
         self.snake_direction = random.choice(
             [Orientation.EAST, Orientation.WEST, Orientation.NORTH, Orientation.SOUTH]
         )
@@ -144,6 +145,7 @@ class Snake:
         )
         self.snake_positions = [(snake_head_x, snake_head_y), (snake_tail_x, snake_tail_y)]
         self.alive = True
+        self.name = name
 
     def kill_snake(self) -> None:
         self.alive = False
@@ -223,14 +225,19 @@ class SnakeEnv(gym.Env):
         self.num_steps_taken = 0
         # Currently player snake is just stored as the first element of the
         # overall snakes list. Maybe just separate variable?
-        self.snakes = [Snake() for _ in range(len(self.opponent_choose_moves) + 1)]
+        self.snakes = [Snake(name="player")]
+        self.snakes += [
+            Snake(name=f"opponent_{idx}") for idx in range(len(self.opponent_choose_moves))
+        ]
 
-        # return self.state, 0, False, {}
         return self.get_snake_state(self.snakes[0])
 
     @property
     def done(self) -> bool:
-        return not [snake.alive for snake in self.snakes]
+        for snake in self.snakes:
+            if snake.name == "player":
+                return False
+        return True
 
     def generate_food(self) -> None:
         possible_food_positions = [
@@ -241,8 +248,6 @@ class SnakeEnv(gym.Env):
         ]
         self.food_position = random.choice(possible_food_positions)
 
-    # @jit
-    # @jit(nopython=True)
     def _step(self, action: int, snake: Snake) -> int:
 
         if action is None:
@@ -263,10 +268,9 @@ class SnakeEnv(gym.Env):
             reward = 1
             self.generate_food()
 
-        # If you hit more snake, game over
-        # TODO: snakes crashing into each other
-        if snake.has_hit_self():
+        if self.has_hit_tails(snake.snake_head):
             snake.kill_snake()
+            print(snake.name)
             reward = 0
 
         self.num_steps_taken += 1
@@ -279,6 +283,9 @@ class SnakeEnv(gym.Env):
             snake.kill_snake()
 
         return reward
+
+    def has_hit_tails(self, snake_head: Tuple[int, int]) -> bool:
+        return any([snake_head in snake.snake_body for snake in self.snakes])
 
     @staticmethod
     def idx_to_flat(pos: Tuple[int, int], dim: int) -> int:
@@ -319,6 +326,11 @@ class SnakeEnv(gym.Env):
                 action = choose_move(snake_state)
                 reward = self._step(action, snake)
                 reward = 0
+
+        for idx, snake in enumerate(self.snakes):
+            if not snake.alive:
+                del self.snakes[idx]
+                del self.opponent_choose_moves[idx - 1]
 
         if self._render:
             self.render_game()
@@ -385,7 +397,7 @@ class SnakeEnv(gym.Env):
 
         # Draw snake
         for idx, snake in enumerate(self.snakes):
-            color = BLUE if idx == 0 else BLACK
+            color = BLUE if snake.name == "player" else BLACK
 
             for snake_pos in snake.snake_body:
                 snake_y = (
