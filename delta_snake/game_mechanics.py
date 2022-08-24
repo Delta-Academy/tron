@@ -9,6 +9,7 @@ import gym
 import pygame
 import torch
 from gym.spaces import Box, Discrete
+from matplotlib import pyplot as plt
 from numba import jit
 from torch import nn
 
@@ -123,12 +124,20 @@ ORIENTATION_2_ROT = {0: 2, 2: 0, 1: 1, 3: 3}
 
 
 class Snake:
-    def __init__(self, name: str = "snek") -> None:
+    def __init__(
+        self, name: str = "snek", starting_position: Optional[Tuple[int, int]] = None
+    ) -> None:
+
         self.snake_direction = random.choice(
             [Orientation.EAST, Orientation.WEST, Orientation.NORTH, Orientation.SOUTH]
         )
-        snake_head_x = random.randint(ARENA_WIDTH // 4, 3 * ARENA_WIDTH // 4)
-        snake_head_y = random.randint(ARENA_HEIGHT // 4, 3 * ARENA_HEIGHT // 4)
+
+        if starting_position is None:
+            snake_head_x = random.randint(ARENA_WIDTH // 4, 3 * ARENA_WIDTH // 4)
+            snake_head_y = random.randint(ARENA_HEIGHT // 4, 3 * ARENA_HEIGHT // 4)
+        else:
+            snake_head_x, snake_head_y = starting_position
+
         snake_tail_x = (
             snake_head_x - 1
             if self.snake_direction == Orientation.EAST
@@ -193,6 +202,26 @@ class Snake:
         del self.snake_positions[-1]
 
 
+def get_starting_positions() -> List[Tuple[int, int]]:
+    """Get a list of starting positions that are not too close together."""
+    min_x = ARENA_WIDTH // 4
+    max_x = 3 * ARENA_WIDTH // 4
+    min_y = ARENA_HEIGHT // 4
+    max_y = 3 * ARENA_HEIGHT // 4
+    positions = []
+
+    # Return n**2 points
+    n = 3
+
+    offset_x = (max_x - min_x) // (n - 1)
+    offset_y = (max_y - min_y) // (n - 1)
+    for i in range(n):
+        for j in range(n):
+            positions.append((min_x + offset_x * i, min_y + offset_y * j))
+
+    return positions
+
+
 class SnakeEnv(gym.Env):
     def __init__(
         self,
@@ -214,6 +243,7 @@ class SnakeEnv(gym.Env):
 
         self.metadata = ""
         self.arena = np.zeros((ARENA_WIDTH, ARENA_HEIGHT, 1))
+        self.starting_positions = get_starting_positions()
         if self._render:
             self.init_visuals()
 
@@ -225,15 +255,19 @@ class SnakeEnv(gym.Env):
         self.num_steps_taken = 0
         # Currently player snake is just stored as the first element of the
         # overall snakes list. Maybe just separate variable?
-        self.snakes = [Snake(name="player")]
+        random.shuffle(self.starting_positions)
+
+        self.snakes = [Snake(name="player", starting_position=self.starting_positions[0])]
         self.snakes += [
-            Snake(name=f"opponent_{idx}") for idx in range(len(self.opponent_choose_moves))
+            Snake(name=f"opponent_{idx}", starting_position=self.starting_positions[idx + 1])
+            for idx in range(len(self.opponent_choose_moves))
         ]
 
         return self.get_snake_state(self.snakes[0])
 
     @property
     def done(self) -> bool:
+        # done if player is not in list of snakes anymore
         for snake in self.snakes:
             if snake.name == "player":
                 return False
@@ -307,9 +341,10 @@ class SnakeEnv(gym.Env):
         )
 
         self.arena[relative_food_position] = 10
-        for pos in snake.snake_body:
-            norm_pos = wrap_position((pos[0] - norm_x, pos[1] - norm_y))
-            self.arena[norm_pos] = 255
+        for body in [snake.snake_body for snake in self.snakes]:
+            for pos in body:
+                norm_pos = wrap_position((pos[0] - norm_x, pos[1] - norm_y))
+                self.arena[norm_pos] = 255
         self.arena[norm_head] = 255
 
         return np.rot90(self.arena, k=ORIENTATION_2_ROT[snake.snake_direction])
@@ -362,19 +397,6 @@ class SnakeEnv(gym.Env):
         self.screen.fill(WHITE)
         self.score_font = pygame.font.SysFont("comicsansms", 35)
 
-    def print_state(self) -> None:
-        # Maybe useful
-        arena = np.zeros((SCREEN_WIDTH, SCREEN_HEIGHT))
-        arena[self.food_position] = 1
-        for new in self.snake_positions:
-            try:
-                arena[new] = 2
-            except:
-                pass
-        print(arena)
-        print("\n")
-        # time.sleep(0.1)
-
     def render_game(self) -> None:
 
         # Maybe necessary maybe not
@@ -396,7 +418,7 @@ class SnakeEnv(gym.Env):
         )
 
         # Draw snake
-        for idx, snake in enumerate(self.snakes):
+        for snake in self.snakes:
             color = BLUE if snake.name == "player" else BLACK
 
             for snake_pos in snake.snake_body:
