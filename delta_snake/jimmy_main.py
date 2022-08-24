@@ -62,7 +62,7 @@ def train() -> nn.Module:
 
     callback = CustomCallback()
     model.learn(
-        total_timesteps=1_000_000,
+        total_timesteps=500_000,
         callback=callback,
     )
     model.save(str(HERE / "howdy_model"))
@@ -94,7 +94,7 @@ def test():
 
     while not done:
 
-        # state = state[:6]
+        # state = state[:t]
         action = model.predict(state.copy())[0]
         # action = human_player(state)
         # action = np.random.randint(3)
@@ -158,5 +158,5 @@ if __name__ == "__main__":
     #     render=True,
     #     verbose=False,
     # )
-    # train()
-    test()
+    train()
+    # test()

@@ -12,15 +12,19 @@ from gym.spaces import Box, Discrete
 from numba import jit
 from torch import nn
 
-ARENA_WIDTH = 11
-ARENA_HEIGHT = 11
+ARENA_WIDTH = 41
+ARENA_HEIGHT = 41
 
 assert ARENA_WIDTH % 2 != 0, "Need odd sized grid for egocentric view"
+assert ARENA_HEIGHT == ARENA_WIDTH, "current only support square arenas"
 
 BLOCK_SIZE = 10
 
 SCREEN_WIDTH = ARENA_WIDTH * BLOCK_SIZE
 SCREEN_HEIGHT = ARENA_HEIGHT * BLOCK_SIZE
+
+# Game terminates after this number of steps
+MAX_STEPS = 2000
 
 BLACK = (0, 0, 0)
 BLUE = (0, 0, 255)
@@ -31,8 +35,6 @@ GREEN = (0, 255, 0)
 DARK_GREEN = (0, 100, 0)
 
 HERE = Path(__file__).parent.resolve()
-
-MAX_SIZE = 30
 
 
 def load_network(team_name: str, network_folder: Path = HERE) -> nn.Module:
@@ -236,7 +238,7 @@ class SnakeEnv(gym.Env):
         if self.verbose and self.num_steps_taken % 1000 == 0:
             print(f"{self.num_steps_taken} steps taken")
 
-        if self.num_steps_taken >= 10000:
+        if self.num_steps_taken >= MAX_STEPS:
             if self.verbose:
                 print("RUN OUT OF TIME!")
             self.snake_alive = False
