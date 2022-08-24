@@ -221,11 +221,7 @@ class SnakeEnv(gym.Env):
 
     @property
     def done(self) -> bool:
-
-        # Make better
-        if not self.snake.alive:
-            return True
-        return False
+        return not self.snake.alive
 
     def generate_food(self) -> None:
         possible_food_positions = [
@@ -304,9 +300,7 @@ class SnakeEnv(gym.Env):
             self.arena[norm_pos] = 255
         self.arena[norm_head] = 255
 
-        rotated = np.rot90(self.arena, k=ORIENTATION_2_ROT[self.snake.snake_direction])
-
-        return rotated
+        return np.rot90(self.arena, k=ORIENTATION_2_ROT[self.snake.snake_direction])
 
     def step(self, action: int) -> Tuple:
 
