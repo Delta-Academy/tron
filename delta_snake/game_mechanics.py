@@ -1,6 +1,7 @@
 import copy
 import random
 import time
+from itertools import chain
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
@@ -26,6 +27,8 @@ SCREEN_HEIGHT = ARENA_HEIGHT * BLOCK_SIZE
 
 # Game terminates after this number of steps
 MAX_STEPS = 2000
+# Temp state control
+MAX_SIZE = 5
 
 BLACK = (0, 0, 0)
 BLUE = (0, 0, 255)
@@ -262,7 +265,8 @@ class SnakeEnv(gym.Env):
         )
 
         self.metadata = ""
-        self.arena = np.zeros((ARENA_WIDTH, ARENA_HEIGHT, 1))
+        self.state = np.zeros(2 * MAX_SIZE)
+
         self.starting_positions = get_starting_positions()
         self.score = 0
         if self._render:
@@ -311,7 +315,7 @@ class SnakeEnv(gym.Env):
             return 0
 
         # AHHHHHHHHHHHHHHH BADDD
-        # action += 1
+        action += 1
         snake.take_action(action)
 
         if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
@@ -373,52 +377,32 @@ class SnakeEnv(gym.Env):
         return pos[0]
 
     def get_snake_state(self, ego_snake: Snake) -> np.ndarray:
-        """Get egocentric positioning for a single snake 'ego_snake'."""
-        return np.array([1, 1, 1])
 
-        # self.arena[:] = 0
-        # # Will break stable baselines
-        # self.arena = self.arena.squeeze()
-        # boundary_pos = np.where(self.boundary_elements_mask(self.arena))
-        # # self.arena[self.boundary_elements_mask(self.arena)] = 88
+        state = list(
+            chain(
+                *ego_snake.snake_positions[:MAX_SIZE],
+                list(self.food_position),
+                REMAP_ORIENTATION[ego_snake.snake_direction],
+            )
+        )
 
-        # #  Subtract to normalise to snake head position
-        # norm_x = ego_snake.snake_head[0] - ARENA_WIDTH // 2
-        # norm_y = ego_snake.snake_head[1] - ARENA_HEIGHT // 2
+        # snake_direction = np.array(REMAP_ORIENTATION[ego_snake.snake_direction])
+        # food_pos = (np.array(self.food_position) / (ARENA_HEIGHT / 2)) - 1
 
-        # norm_boundary = (boundary_pos[0] - norm_x, boundary_pos[1] - norm_y)
-        # keep_idx = np.logical_and(
-        #     np.logical_and(0 <= norm_boundary[0], norm_boundary[0] < ARENA_WIDTH),
-        #     np.logical_and(0 <= norm_boundary[1], norm_boundary[1] < ARENA_HEIGHT),
-        # )
-        # norm_boundary = (norm_boundary[0][keep_idx], norm_boundary[1][keep_idx])
-        # self.arena[norm_boundary] = 88
+        # self.state[: len(snake_pos)] = snake_pos
+        # self.state[-4:-2] = snake_direction
+        # self.state[-2:] = food_pos
+        # return self.state
+        stable_baselines = True
+        if stable_baselines:
+            arr_state = np.array(state)
+            arr_state[:-2] = (arr_state[:-2] / (ARENA_HEIGHT / 2)) - 1
 
-        # norm_head = wrap_position(
-        #     (ego_snake.snake_head[0] - norm_x, ego_snake.snake_head[1] - norm_y)
-        # )
+            return arr_state
 
-        # relative_food_position = wrap_position(
-        #     (self.food_position[0] - norm_x, self.food_position[1] - norm_y)
-        # )
+        return state
 
-        # if in_arena(relative_food_position):
-        #     self.arena[relative_food_position] = 10
-
-        # for snake in self.snakes:
-        #     # Currently can't tell apart opponent head from tail
-        #     for pos in snake.snake_positions:
-        #         norm_pos = wrap_position((pos[0] - norm_x, pos[1] - norm_y))
-        #         if in_arena(norm_pos):
-        #             self.arena[norm_pos] = 255
-        # self.arena[norm_head] = 255
-
-        # self.arena = np.rot90(self.arena, k=ORIENTATION_2_ROT[ego_snake.snake_direction])
-
-        # # print(self.arena)
-        # # print("\n")
-
-        # return self.arena
+        # return np.array([1, 1, 1, 1])
 
     def step(self, action: int) -> Tuple:
 
