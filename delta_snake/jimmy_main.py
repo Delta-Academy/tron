@@ -3,8 +3,14 @@ import time
 from typing import Any, Dict
 
 import numpy as np
-
 import pygame
+from matplotlib import pyplot as plt
+from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.utils import safe_mean
+from torch import nn
+from tqdm import tqdm
+
 from check_submission import check_submission
 from game_mechanics import (
     HERE,
@@ -15,12 +21,6 @@ from game_mechanics import (
     play_snake,
     save_network,
 )
-from matplotlib import pyplot as plt
-from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.utils import safe_mean
-from torch import nn
-from tqdm import tqdm
 
 TEAM_NAME = "Team jimmy"  # <---- Enter your team name here!
 assert TEAM_NAME != "Team Name", "Please change your TEAM_NAME!"
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     play_snake(
         your_choose_move=human_player,
         # opponent_choose_moves=[choose_move_model] * 1,
-        opponent_choose_moves=[lambda x: 1] * 1,
+        opponent_choose_moves=[lambda x: None] * 1,
         game_speed_multiplier=5,
         render=True,
         verbose=False,

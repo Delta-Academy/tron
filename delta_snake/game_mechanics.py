@@ -3,9 +3,8 @@ import time
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
-import numpy as np
-
 import gym
+import numpy as np
 import pygame
 import torch
 from gym.spaces import Box, Discrete
@@ -13,8 +12,8 @@ from matplotlib import pyplot as plt
 from numba import jit
 from torch import nn
 
-ARENA_WIDTH = 41
-ARENA_HEIGHT = 41
+ARENA_WIDTH = 11
+ARENA_HEIGHT = 11
 
 assert ARENA_WIDTH % 2 != 0, "Need odd sized grid for egocentric view"
 assert ARENA_HEIGHT == ARENA_WIDTH, "current only support square arenas"
@@ -87,11 +86,19 @@ def play_snake(
 
 
 def wrap_position(pos: Tuple[int, int]) -> Tuple[int, int]:
-    x, y = pos
-    # This could easily be wrong
-    x = ARENA_WIDTH + x if x < 0 else x - ARENA_WIDTH if x >= ARENA_WIDTH else x
-    y = ARENA_HEIGHT + y if y < 0 else y - ARENA_HEIGHT if y >= ARENA_HEIGHT else y
-    return (x, y)
+    # Have removed the wrapping for now
+    return pos
+    # x, y = pos
+    # # This could easily be wrong
+    # x = ARENA_WIDTH + x if x < 0 else x - ARENA_WIDTH if x >= ARENA_WIDTH else x
+    # y = ARENA_HEIGHT + y if y < 0 else y - ARENA_HEIGHT if y >= ARENA_HEIGHT else y
+    # return (x, y)
+
+
+def in_arena(pos: Tuple[int, int]):
+    y_out = pos[1] <= 0 or pos[1] >= ARENA_HEIGHT - 1
+    x_out = pos[0] <= 0 or pos[0] >= ARENA_WIDTH - 1
+    return not x_out and not y_out
 
 
 class Action:
@@ -158,6 +165,12 @@ class Snake:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Snake) and self.name == other.name
+
+    def has_hit_boundaries(self) -> bool:
+        # y_boundary_hit = self.snake_head[1] <= 0 or self.snake_head[1] >= ARENA_HEIGHT - 1
+        # x_boundary_hit = self.snake_head[0] <= 0 or self.snake_head[0] >= ARENA_WIDTH - 1
+        return not in_arena(self.snake_head)
+        # return y_boundary_hit or x_boundary_hit
 
     def kill_snake(self) -> None:
         self.alive = False
@@ -254,8 +267,8 @@ class SnakeEnv(gym.Env):
     def reset(self) -> np.ndarray:
         self.player_dead = False
         self.food_position = (
-            random.randint(0, ARENA_WIDTH - 1),
-            random.randint(0, ARENA_HEIGHT - 1),
+            random.randint(2, ARENA_WIDTH - 2),
+            random.randint(2, ARENA_HEIGHT - 2),
         )
         self.num_steps_taken = 0
         # Currently player snake is just stored as the first element of the
@@ -308,7 +321,7 @@ class SnakeEnv(gym.Env):
             if snake.name == "player":
                 self.score += 1
 
-        if self.has_hit_tails(snake.snake_head):
+        if self.has_hit_tails(snake.snake_head) or snake.has_hit_boundaries():
             snake.kill_snake()
             reward = 0
 
@@ -344,14 +357,36 @@ class SnakeEnv(gym.Env):
         """idx of a matrix to its position in the flattened vector."""
         return dim * pos[0] + pos[1]
 
+    @staticmethod
+    def boundary_elements_mask(matrix: np.ndarray) -> np.ndarray:
+        mask = np.ones(matrix.shape, dtype=bool)
+        mask[matrix.ndim * (slice(1, -1),)] = False
+        return mask
+
+    def in_arena(self, pos: Tuple[int, int]):
+        return pos[0]
+
     def get_snake_state(self, ego_snake: Snake) -> np.ndarray:
         """Get egocentric positioning for a single snake 'ego_snake'."""
 
         self.arena[:] = 0
+        # Will break stable baselines
+        self.arena = self.arena.squeeze()
+        boundary_pos = np.where(self.boundary_elements_mask(self.arena))
+        # self.arena[self.boundary_elements_mask(self.arena)] = 88
 
         #  Subtract to normalise to snake head position
         norm_x = ego_snake.snake_head[0] - ARENA_WIDTH // 2
         norm_y = ego_snake.snake_head[1] - ARENA_HEIGHT // 2
+
+        norm_boundary = (boundary_pos[0] - norm_x, boundary_pos[1] - norm_y)
+        keep_idx = np.logical_and(
+            np.logical_and(0 <= norm_boundary[0], norm_boundary[0] < ARENA_WIDTH),
+            np.logical_and(0 <= norm_boundary[1], norm_boundary[1] < ARENA_HEIGHT),
+        )
+        norm_boundary = (norm_boundary[0][keep_idx], norm_boundary[1][keep_idx])
+        self.arena[norm_boundary] = 88
+
         norm_head = wrap_position(
             (ego_snake.snake_head[0] - norm_x, ego_snake.snake_head[1] - norm_y)
         )
@@ -360,15 +395,22 @@ class SnakeEnv(gym.Env):
             (self.food_position[0] - norm_x, self.food_position[1] - norm_y)
         )
 
-        self.arena[relative_food_position] = 10
+        if in_arena(relative_food_position):
+            self.arena[relative_food_position] = 10
+
         for snake in self.snakes:
             # Currently can't tell apart opponent head from tail
             for pos in snake.snake_positions:
                 norm_pos = wrap_position((pos[0] - norm_x, pos[1] - norm_y))
-                self.arena[norm_pos] = 255
+                if in_arena(norm_pos):
+                    self.arena[norm_pos] = 255
         self.arena[norm_head] = 255
 
         self.arena = np.rot90(self.arena, k=ORIENTATION_2_ROT[ego_snake.snake_direction])
+
+        print(self.arena)
+        print("\n")
+
         return self.arena
 
     def step(self, action: int) -> Tuple:
@@ -434,6 +476,11 @@ class SnakeEnv(gym.Env):
             self.screen,
             GREEN,
             [food_screen_x * BLOCK_SIZE, food_screen_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
+        )
+
+        # Draw boundaries
+        pygame.draw.rect(
+            self.screen, BLACK, [1, 1, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1], width=BLOCK_SIZE
         )
 
         # Draw snake
