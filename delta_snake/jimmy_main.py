@@ -1,4 +1,5 @@
 import cProfile
+import random
 import time
 from typing import Any, Dict
 
@@ -106,8 +107,8 @@ def test():
 
 def n_games():
 
-    env = SnakeEnv(lambda x: x, verbose=False, render=False)
-    n = 100
+    env = SnakeEnv([choose_move_randomly] * 2, verbose=False, render=False)
+    n = 3000
     n_steps_list = []
 
     for _ in tqdm(range(n)):
@@ -118,18 +119,20 @@ def n_games():
 
         while not done:
 
-            action = np.random.randint(3)
+            action = choose_move_randomly(state)
             state, reward, done, _ = env.step(action)
             n_steps += 1
         n_steps_list.append(n_steps)
 
+    # plt.hist(n_steps_list)
+    plt.show()
     print(f"n steps = {np.mean(n_steps_list)}")
 
 
 if __name__ == "__main__":
 
     # cProfile.run("n_games()", "profile.prof")
-    # n_games()
+    n_games()
 
     # ## Example workflow, feel free to edit this! ###
     # network = train()
@@ -152,10 +155,9 @@ if __name__ == "__main__":
     #     return choose_move(state, my_value_fn)
     #
 
-    model = PPO.load(str(HERE / "howdy_model"))
-
-    def choose_move_model(state) -> int:
-        return model.predict(state.copy())[0] + 1
+    # model = PPO.load(str(HERE / "howdy_model"))
+    # def choose_move_model(state) -> int:
+    #     return model.predict(state.copy())[0] + 1
 
     # play_snake(
     #     your_choose_move=choose_move_model,
@@ -165,13 +167,13 @@ if __name__ == "__main__":
     #     verbose=False,
     # )
 
-    play_snake(
-        your_choose_move=human_player,
-        # opponent_choose_moves=[choose_move_model] * 1,
-        opponent_choose_moves=[lambda x: None] * 1,
-        game_speed_multiplier=5,
-        render=True,
-        verbose=False,
-    )
+    # play_snake(
+    #     your_choose_move=human_player,
+    #     # opponent_choose_moves=[choose_move_model] * 1,
+    #     opponent_choose_moves=[lambda x: None] * 1,
+    #     game_speed_multiplier=5,
+    #     render=True,
+    #     verbose=False,
+    # )
     # train()
     # test()

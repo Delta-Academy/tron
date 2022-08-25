@@ -1,3 +1,4 @@
+import copy
 import random
 import time
 from pathlib import Path
@@ -12,8 +13,8 @@ from matplotlib import pyplot as plt
 from numba import jit
 from torch import nn
 
-ARENA_WIDTH = 11
-ARENA_HEIGHT = 11
+ARENA_WIDTH = 31
+ARENA_HEIGHT = 31
 
 assert ARENA_WIDTH % 2 != 0, "Need odd sized grid for egocentric view"
 assert ARENA_HEIGHT == ARENA_WIDTH, "current only support square arenas"
@@ -65,7 +66,8 @@ def save_network(network: nn.Module, team_name: str) -> None:
 
 
 def choose_move_randomly(state):
-    return random.choice([Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT])
+    move = int(random.random() * 3) + 1
+    return move
 
 
 def play_snake(
@@ -246,6 +248,8 @@ class SnakeEnv(gym.Env):
         render: bool = False,
         game_speed_multiplier: int = 1,
     ):
+        self.choose_move_store = copy.deepcopy(opponent_choose_moves)
+
         self.opponent_choose_moves = opponent_choose_moves
         self._render = render
         self.verbose = verbose
@@ -265,6 +269,7 @@ class SnakeEnv(gym.Env):
             self.init_visuals()
 
     def reset(self) -> np.ndarray:
+        self.opponent_choose_moves = self.choose_move_store
         self.player_dead = False
         self.food_position = (
             random.randint(2, ARENA_WIDTH - 2),
@@ -282,6 +287,7 @@ class SnakeEnv(gym.Env):
             for idx in range(len(self.opponent_choose_moves))
         ]
         self.dead_snakes: List[Snake] = []
+        assert len(self.snakes) == len(self.opponent_choose_moves) + 1
 
         return self.get_snake_state(self.snakes[0])
 
@@ -368,50 +374,51 @@ class SnakeEnv(gym.Env):
 
     def get_snake_state(self, ego_snake: Snake) -> np.ndarray:
         """Get egocentric positioning for a single snake 'ego_snake'."""
+        return np.array([1, 1, 1])
 
-        self.arena[:] = 0
-        # Will break stable baselines
-        self.arena = self.arena.squeeze()
-        boundary_pos = np.where(self.boundary_elements_mask(self.arena))
-        # self.arena[self.boundary_elements_mask(self.arena)] = 88
+        # self.arena[:] = 0
+        # # Will break stable baselines
+        # self.arena = self.arena.squeeze()
+        # boundary_pos = np.where(self.boundary_elements_mask(self.arena))
+        # # self.arena[self.boundary_elements_mask(self.arena)] = 88
 
-        #  Subtract to normalise to snake head position
-        norm_x = ego_snake.snake_head[0] - ARENA_WIDTH // 2
-        norm_y = ego_snake.snake_head[1] - ARENA_HEIGHT // 2
+        # #  Subtract to normalise to snake head position
+        # norm_x = ego_snake.snake_head[0] - ARENA_WIDTH // 2
+        # norm_y = ego_snake.snake_head[1] - ARENA_HEIGHT // 2
 
-        norm_boundary = (boundary_pos[0] - norm_x, boundary_pos[1] - norm_y)
-        keep_idx = np.logical_and(
-            np.logical_and(0 <= norm_boundary[0], norm_boundary[0] < ARENA_WIDTH),
-            np.logical_and(0 <= norm_boundary[1], norm_boundary[1] < ARENA_HEIGHT),
-        )
-        norm_boundary = (norm_boundary[0][keep_idx], norm_boundary[1][keep_idx])
-        self.arena[norm_boundary] = 88
+        # norm_boundary = (boundary_pos[0] - norm_x, boundary_pos[1] - norm_y)
+        # keep_idx = np.logical_and(
+        #     np.logical_and(0 <= norm_boundary[0], norm_boundary[0] < ARENA_WIDTH),
+        #     np.logical_and(0 <= norm_boundary[1], norm_boundary[1] < ARENA_HEIGHT),
+        # )
+        # norm_boundary = (norm_boundary[0][keep_idx], norm_boundary[1][keep_idx])
+        # self.arena[norm_boundary] = 88
 
-        norm_head = wrap_position(
-            (ego_snake.snake_head[0] - norm_x, ego_snake.snake_head[1] - norm_y)
-        )
+        # norm_head = wrap_position(
+        #     (ego_snake.snake_head[0] - norm_x, ego_snake.snake_head[1] - norm_y)
+        # )
 
-        relative_food_position = wrap_position(
-            (self.food_position[0] - norm_x, self.food_position[1] - norm_y)
-        )
+        # relative_food_position = wrap_position(
+        #     (self.food_position[0] - norm_x, self.food_position[1] - norm_y)
+        # )
 
-        if in_arena(relative_food_position):
-            self.arena[relative_food_position] = 10
+        # if in_arena(relative_food_position):
+        #     self.arena[relative_food_position] = 10
 
-        for snake in self.snakes:
-            # Currently can't tell apart opponent head from tail
-            for pos in snake.snake_positions:
-                norm_pos = wrap_position((pos[0] - norm_x, pos[1] - norm_y))
-                if in_arena(norm_pos):
-                    self.arena[norm_pos] = 255
-        self.arena[norm_head] = 255
+        # for snake in self.snakes:
+        #     # Currently can't tell apart opponent head from tail
+        #     for pos in snake.snake_positions:
+        #         norm_pos = wrap_position((pos[0] - norm_x, pos[1] - norm_y))
+        #         if in_arena(norm_pos):
+        #             self.arena[norm_pos] = 255
+        # self.arena[norm_head] = 255
 
-        self.arena = np.rot90(self.arena, k=ORIENTATION_2_ROT[ego_snake.snake_direction])
+        # self.arena = np.rot90(self.arena, k=ORIENTATION_2_ROT[ego_snake.snake_direction])
 
-        print(self.arena)
-        print("\n")
+        # # print(self.arena)
+        # # print("\n")
 
-        return self.arena
+        # return self.arena
 
     def step(self, action: int) -> Tuple:
 
@@ -430,13 +437,43 @@ class SnakeEnv(gym.Env):
         assert self.snakes[0] == self.player_snake
         assert self.player_snake.name == "player"
 
-        for snake in self.snakes:
+        idx_alive = []
+        for idx, snake in enumerate(self.snakes):
             if not snake.alive:
                 if snake.name == "player":
                     self.player_dead = True
                 self.dead_snakes.append(snake)
+            else:
+                idx_alive.append(idx)
 
-        self.snakes = [snake for snake in self.snakes if snake.alive]
+        self.snakes = [self.snakes[idx] for idx in idx_alive]
+
+        self.opponent_choose_moves = [
+            self.opponent_choose_moves[idx - 1] for idx in idx_alive if idx != 0
+        ]
+
+        # self.snakes = [snake for snake in self.snakes if snake.alive]
+
+        # self.snakes, self.opponent_choose_moves = list(
+        #     zip(
+        #         *[
+        #             (snake, choose_move)
+        #             for snake, choose_move in zip(self.snakes, self.opponent_choose_moves)
+        #             if snake.alive
+        #         ]
+        #     )
+        # )
+
+        # keep_snakes = []
+        # keep_moves = []
+
+        # for snake, choose_move in zip(self.snakes, self.opponent_choose_moves):
+        #     if snake.alive:
+        #         keep_snakes.append(snake)
+        #         keep_moves.append(choose_move)
+
+        # self.snakes = keep_snakes
+        # self.opponent_choose_moves = keep_moves
 
         if self._render:
             self.render_game()
