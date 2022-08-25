@@ -52,14 +52,14 @@ def train() -> nn.Module:
 
     Returns:
     """
-    env = SnakeEnv([lambda x: x], verbose=False, render=False)
+    env = SnakeEnv([choose_move_randomly] * 2, verbose=False, render=False)
     env.reset()
 
     # model = PPO("CnnPolicy", env, verbose=2, ent_coef=0.01)
-    # model = PPO("MlpPolicy", env, verbose=2, ent_coef=0.01)
+    model = PPO("MlpPolicy", env, verbose=2, ent_coef=0.01)
 
-    model = PPO.load(str(HERE / "howdy_model"))
-    model.set_env(env)
+    # model = PPO.load(str(HERE / "howdy_model"))
+    # model.set_env(env)
 
     callback = CustomCallback()
     model.learn(
@@ -86,7 +86,7 @@ def choose_move(state: np.ndarray, network: Any) -> int:
 
 def test():
 
-    env = SnakeEnv(lambda x: x, verbose=False, render=True)
+    env = SnakeEnv([choose_move_randomly] * 5, verbose=False, render=True)
 
     state = env.reset()
     done = False
@@ -96,11 +96,12 @@ def test():
     while not done:
 
         # state = state[:t]
-        action = model.predict(state.copy())[0]
-        # action = human_player(state)
+        # action = model.predict(state.copy())[0]
+        action = human_player(state)
         # action = np.random.randint(3)
         state, reward, done, _ = env.step(action)
         rewards += reward
+        time.sleep(0.1)
 
     print(f"score = {rewards}")
 
@@ -132,7 +133,7 @@ def n_games():
 if __name__ == "__main__":
 
     # cProfile.run("n_games()", "profile.prof")
-    n_games()
+    # n_games()
 
     # ## Example workflow, feel free to edit this! ###
     # network = train()
@@ -176,4 +177,4 @@ if __name__ == "__main__":
     #     verbose=False,
     # )
     # train()
-    # test()
+    test()
