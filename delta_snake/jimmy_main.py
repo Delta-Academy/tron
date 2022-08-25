@@ -14,6 +14,8 @@ from tqdm import tqdm
 
 from check_submission import check_submission
 from game_mechanics import (
+    ARENA_HEIGHT,
+    ARENA_WIDTH,
     HERE,
     SnakeEnv,
     choose_move_randomly,
@@ -46,20 +48,35 @@ def smooth_trace(trace: np.ndarray, one_sided_window_size: int = 3) -> np.ndarra
     return trace
 
 
+def choose_move_square(state):
+    """This bot happily goes round the edge in a square."""
+    orientation = tuple(state[-2:])
+    head = state[:2]
+    if orientation == tuple([0, -1]) and head[1] <= -0.9:
+        return 3 - 1
+    if orientation == tuple([-1, 0]) and head[0] <= -0.9:
+        return 3 - 1
+    if orientation == tuple([0, 1]) and head[1] >= 0.9:
+        return 3 - 1
+    if orientation == tuple([1, 0]) and head[0] >= 0.9:
+        return 3 - 1
+    return 0
+
+
 def train() -> nn.Module:
     """
     TODO: Write this function to train your algorithm.
 
     Returns:
     """
-    env = SnakeEnv([choose_move_randomly] * 2, verbose=False, render=False)
+    env = SnakeEnv([choose_move_square] * 2, verbose=False, render=False)
     env.reset()
 
     # model = PPO("CnnPolicy", env, verbose=2, ent_coef=0.01)
-    model = PPO("MlpPolicy", env, verbose=2, ent_coef=0.01)
+    # model = PPO("MlpPolicy", env, verbose=2, ent_coef=0.01)
 
-    # model = PPO.load(str(HERE / "howdy_model"))
-    # model.set_env(env)
+    model = PPO.load(str(HERE / "howdy_model"))
+    model.set_env(env)
 
     callback = CustomCallback()
     model.learn(
@@ -86,7 +103,7 @@ def choose_move(state: np.ndarray, network: Any) -> int:
 
 def test():
 
-    env = SnakeEnv([choose_move_randomly] * 5, verbose=False, render=True)
+    env = SnakeEnv([choose_move_square] * 2, verbose=False, render=True)
 
     state = env.reset()
     done = False
@@ -96,8 +113,8 @@ def test():
     while not done:
 
         # state = state[:t]
-        # action = model.predict(state.copy())[0]
-        action = human_player(state)
+        action = model.predict(state.copy())[0]
+        # action = human_player(state)
         # action = np.random.randint(3)
         state, reward, done, _ = env.step(action)
         rewards += reward
