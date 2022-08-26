@@ -16,7 +16,7 @@ You are navigating a grid. At each timestep, you can take 1 of 3 possible action
 
 **Turning left** or **right** will change the direction of the snake in that direction, and move the snake forward 1 square in that direction.
 
-### Points
+### Points
 
 For eating every apple **you score 1 point.** The snake also grows 1 block longer for each :apple: eaten. The block is added to the tail of the :snake:.
 
@@ -24,7 +24,7 @@ If you **hit any walls** or you **collide with another snake** (including yousel
 
 The game :joystick: will also end after `1000` steps
 
-### Opponents
+### Opponents
 
 Unlike regular snake :snake:, you will share the arena with multiple **opponents**!
 
@@ -79,15 +79,17 @@ The **tuple** returned from each `env.step()` has:
 
 - A **dictionary** :book: describing the positions of objects on the board
 
-  - `player_snake`: **list** of **tuples** describing your snake's coordinates on the grid location
-  - `player_orientation`: **tuple** the orientation of your snake
-  - `opponent_snakes`: a **list** of **lists** of **tuples** decribing the opponent snake orientations
-  - `opponent_orientations`: a **list** of **lists** of **tuples** decribing the opponent snake orientations
+  - `player_snake`: **list** of **tuples** describing your snake's coordinates\* on the grid location
+  - `player_orientation`: **int** the orientation of your snake (see Orientation in game_mechanics)
+  - `opponent_snakes`: a **list** of **lists** of **tuples** decribing the living opponent snakes coordinates\*
+  - `opponent_orientations`: a **list** of **ints** describing the living opponent snakes orientations (see Orientation in game_mechanics)
   - `food_location`: a **list** of **tuples**. Location of apples in the grid
 
 - The reward for each timestep
 - Whether the point is done (boolean)
 - Extra information
+
+\*The first tuple in the list is the head
 
 ## Arena Layout
 
@@ -97,7 +99,7 @@ The width of the arena lies along the x-axis and the height along the y-axis.
 
 **Positions:** top left corner is at `(0, 0)`, the bottom right corner is at `(ARENA_WIDTH, ARENA_HEIGHT)` and the top right corner is at `(ARENA_WIDTH, 0)`.
 
-**Snake (in black**) moves East, West, North, and South. The snake cannot move diagonally.
+**Snake (blue tail = you, red tail = opponent)** moves East, West, North, and South. The snake cannot move diagonally.
 
 **Apple (in green**) yum!
 

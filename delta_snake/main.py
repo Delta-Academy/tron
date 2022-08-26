@@ -4,7 +4,15 @@ import numpy as np
 from torch import nn
 
 from check_submission import check_submission
-from game_mechanics import SnakeEnv, choose_move_randomly, load_network, play_snake, save_network
+from game_mechanics import (
+    SnakeEnv,
+    choose_move_randomly,
+    choose_move_square,
+    human_player,
+    load_network,
+    play_snake,
+    save_network,
+)
 
 TEAM_NAME = "Team Name"  # <---- Enter your team name here!
 assert TEAM_NAME != "Team Name", "Please change your TEAM_NAME!"
@@ -20,7 +28,7 @@ def train() -> nn.Module:
     raise NotImplementedError("You need to implement this function!")
 
 
-def choose_move(state: np.ndarray, network: Any) -> int:
+def choose_move(state: np.ndarray, network=None) -> int:
     """Called during competitive play. It acts greedily given current state of the board and value
     function dictionary. It returns a single move to play.
 
@@ -42,7 +50,7 @@ if __name__ == "__main__":
         TEAM_NAME
     )  # <---- Make sure I pass! Or your solution will not work in the tournament!!
 
-    my_value_fn = load_network(TEAM_NAME)
+    my_network = load_network(TEAM_NAME)
 
     # Code below plays a single game against a random
     #  opponent, think about how you might want to adapt this to
@@ -52,12 +60,13 @@ if __name__ == "__main__":
 
         This converts choose_move() to that format.
         """
-        return choose_move(state, my_value_fn)
+        return choose_move(state, my_network)
 
+    # Play against your bot!
     play_snake(
-        your_choose_move=choose_move_no_network,
-        opponent_choose_move=choose_move_randomly,
-        game_speed_multiplier=1,
+        your_choose_move=human_player,
+        opponent_choose_moves=[choose_move_square] * 2,
+        game_speed_multiplier=10,
         render=True,
         verbose=False,
     )
