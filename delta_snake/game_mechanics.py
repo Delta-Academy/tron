@@ -46,8 +46,8 @@ def choose_move_randomly(state: Dict) -> int:
 def choose_move_square(state: Dict) -> int:
     """This bot happily goes round the edge in a square."""
 
-    orientation = state["player"].snake_direction
-    head = state["player"].snake_head
+    orientation = state["player"].direction
+    head = state["player"].head
 
     if orientation == 0 and head[1] <= 3:
         return 3
@@ -143,12 +143,12 @@ class Orientation:
     WEST = 3  # negative x-direction
 
 
-class Snake:
+class Bike:
     def __init__(
         self, name: str = "snek", starting_position: Optional[Tuple[int, int]] = None
     ) -> None:
 
-        self.snake_direction = random.choice(
+        self.direction = random.choice(
             [Orientation.EAST, Orientation.WEST, Orientation.NORTH, Orientation.SOUTH]
         )
 
@@ -158,63 +158,65 @@ class Snake:
         else:
             snake_head_x, snake_head_y = starting_position
 
-        self.snake_positions = [(snake_head_x, snake_head_y)]
+        self.positions = [(snake_head_x, snake_head_y)]
 
         for offset in range(1, TAIL_STARTING_LENGTH + 1):
             snake_tail_x = (
                 snake_head_x - offset
-                if self.snake_direction == Orientation.EAST
+                if self.direction == Orientation.EAST
                 else snake_head_x + offset
-                if self.snake_direction == Orientation.WEST
+                if self.direction == Orientation.WEST
                 else snake_head_x
             )
             snake_tail_y = (
                 snake_head_y - offset
-                if self.snake_direction == Orientation.NORTH
+                if self.direction == Orientation.NORTH
                 else snake_head_y + offset
-                if self.snake_direction == Orientation.SOUTH
+                if self.direction == Orientation.SOUTH
                 else snake_head_y
             )
-            self.snake_positions.append((snake_tail_x, snake_tail_y))
+            self.positions.append((snake_tail_x, snake_tail_y))
 
         self.alive = True
         self.name = name
         self.is_murderer = False
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, Snake) and self.name == other.name
+        if not isinstance(other, Bike):
+            raise NotImplementedError
+        return self.name == other.name
 
     def has_hit_boundaries(self) -> bool:
-        return not in_arena(self.snake_head)
+        return not in_arena(self.head)
 
     def kill_snake(self) -> None:
         self.alive = False
 
     def has_hit_self(self) -> bool:
-        return self.snake_head in self.snake_body
+        return self.head in self.body
 
     @property
-    def snake_length(self) -> int:
-        return len(self.snake_positions)
+    def length(self) -> int:
+        return len(self.positions)
 
     @property
-    def snake_head(self) -> Tuple[int, int]:
-        return self.snake_positions[0]
+    def head(self) -> Tuple[int, int]:
+        return self.positions[0]
 
     @property
-    def snake_body(self) -> List[Tuple[int, int]]:
-        return self.snake_positions[1:]
+    def body(self) -> List[Tuple[int, int]]:
+        return self.positions[1:]
 
     def take_action(self, action: int) -> None:
 
         if action == 2:
-            new_orientation = (self.snake_direction + 1) % 4
+            new_orientation = (self.direction + 1) % 4
         elif action == 3:
-            new_orientation = (self.snake_direction - 1) % 4
+            new_orientation = (self.direction - 1) % 4
         else:
-            new_orientation = self.snake_direction
+            new_orientation = self.direction
 
-        x, y = self.snake_head
+        x, y = self.head
         if new_orientation % 2 == 0:
             # South is 0 (y -= 1), North is 2 (y += 1)
             y += new_orientation - 1
@@ -224,13 +226,13 @@ class Snake:
 
         # Update position and orientation
         if action is not None:
-            self.snake_positions.insert(0, (x, y))
-            self.snake_direction = new_orientation
+            self.positions.insert(0, (x, y))
+            self.direction = new_orientation
 
-        self.snake_positions = [wrap_position(pos) for pos in self.snake_positions]
+        self.positions = [wrap_position(pos) for pos in self.positions]
 
     def remove_tail_end(self) -> None:
-        del self.snake_positions[-1]
+        del self.positions[-1]
 
     def make_a_murderer(self) -> None:
         self.is_murderer = True
@@ -289,13 +291,13 @@ class TronEnv(gym.Env):
 
         random.shuffle(self.starting_positions)
 
-        self.player_snake = Snake(name="player", starting_position=self.starting_positions[0])
+        self.player_snake = Bike(name="player", starting_position=self.starting_positions[0])
         self.snakes = [self.player_snake]
         self.snakes += [
-            Snake(name=f"opponent_{idx}", starting_position=self.starting_positions[idx + 1])
+            Bike(name=f"opponent_{idx}", starting_position=self.starting_positions[idx + 1])
             for idx in range(len(self.opponent_choose_moves))
         ]
-        self.dead_snakes: List[Snake] = []
+        self.dead_snakes: List[Bike] = []
         assert len(self.snakes) == len(self.opponent_choose_moves) + 1
 
         # Aint no food no more
@@ -316,14 +318,14 @@ class TronEnv(gym.Env):
         # No food no more
         return
 
-    def _step(self, action: int, snake: Snake) -> None:
+    def _step(self, action: int, snake: Bike) -> None:
 
         snake.take_action(action)
 
         if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
             raise ValueError(f"Invalid action: {action}")
 
-        if self.has_hit_tails(snake.snake_head) or snake.has_hit_boundaries():
+        if self.has_hit_tails(snake.head) or snake.has_hit_boundaries():
             snake.kill_snake()
         self.head_to_head_collision(snake)
 
@@ -332,11 +334,11 @@ class TronEnv(gym.Env):
 
         return
 
-    def head_to_head_collision(self, snake: Snake) -> bool:
+    def head_to_head_collision(self, snake: Bike) -> bool:
         for other_snake in self.snakes:
             if other_snake == snake:
                 continue
-            if other_snake.snake_head == snake.snake_head:
+            if other_snake.head == snake.head:
                 other_snake.kill_snake()
                 snake.kill_snake()
                 return True
@@ -344,9 +346,9 @@ class TronEnv(gym.Env):
 
     def has_hit_tails(self, snake_head: Tuple[int, int]) -> bool:
         for other_snake in self.snakes:
-            if snake_head in other_snake.snake_body:
+            if snake_head in other_snake.body:
                 # Did other_snake kill with body, not suicide?
-                if snake_head != other_snake.snake_head:
+                if snake_head != other_snake.head:
                     other_snake.make_a_murderer()
                 return True
         return False
@@ -357,7 +359,7 @@ class TronEnv(gym.Env):
         mask[matrix.ndim * (slice(1, -1),)] = False
         return mask
 
-    def get_snake_state(self, snake: Snake) -> Dict:
+    def get_snake_state(self, snake: Bike) -> Dict:
         state: Dict[str, Any] = {}
         state["player"] = snake
         state["opponents"] = [other_snake for other_snake in self.snakes if other_snake != snake]
@@ -408,11 +410,11 @@ class TronEnv(gym.Env):
 
         return self.get_snake_state(self.player_snake), reward, self.done, {}
 
-    def find_winner(self) -> Optional[Snake]:
+    def find_winner(self) -> Optional[Bike]:
         assert self.done
         if len(self.snakes) == 0:
             return None
-        return self.snakes[np.argmax([snake.snake_length for snake in self.snakes])]
+        return self.snakes[np.argmax([snake.length for snake in self.snakes])]
 
     def init_visuals(self) -> None:
         pygame.init()
@@ -440,7 +442,7 @@ class TronEnv(gym.Env):
         for snake in self.snakes:
             color = self.color_lookup[snake.name]
 
-            for snake_pos in snake.snake_body:
+            for snake_pos in snake.body:
                 snake_y = (
                     ARENA_HEIGHT - snake_pos[1] - 1
                 )  # Flip y axis because pygame counts 0,0 as top left
@@ -450,12 +452,12 @@ class TronEnv(gym.Env):
                     [snake_pos[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
                 )
             # Flip y axis because pygame counts 0,0 as top left
-            snake_y = ARENA_HEIGHT - snake.snake_head[1] - 1
+            snake_y = ARENA_HEIGHT - snake.head[1] - 1
             pygame.draw.rect(
                 self.screen,
                 BLACK,
                 [
-                    snake.snake_head[0] * BLOCK_SIZE,
+                    snake.head[0] * BLOCK_SIZE,
                     snake_y * BLOCK_SIZE,
                     BLOCK_SIZE,
                     BLOCK_SIZE,
@@ -482,5 +484,6 @@ def human_player(state) -> Optional[int]:
     return 1
 
 
-def transition_function(state: Dict, action: int) -> Dict:
-    pass
+# def transition_function(state: Dict, action: int, bike_move: Bike) -> Dict:
+#     1 / 0
+#     pass
