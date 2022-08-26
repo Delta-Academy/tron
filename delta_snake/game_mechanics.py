@@ -1,6 +1,6 @@
-import copy
 import random
 import time
+from copy import copy, deepcopy
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -26,7 +26,7 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
 # will break with >6 teams
-SNAKE_COLORS = [
+BIKE_COLORS = [
     (237, 0, 3),
     (53, 0, 255),
     (1, 254, 1),
@@ -186,10 +186,22 @@ class Bike:
             raise NotImplementedError
         return self.name == other.name
 
+    def __copy__(self) -> "Bike":
+        print("OOOH i be copying")
+        positions = deepcopy(self.positions)
+        cls = self.__class__
+        result = cls.__new__(cls)
+        result.__dict__.update(self.__dict__)
+        result.set_positions(positions)
+        return result
+
+    def set_positions(self, positions: List[Tuple[int, int]]) -> None:
+        self.positions = positions
+
     def has_hit_boundaries(self) -> bool:
         return not in_arena(self.head)
 
-    def kill_snake(self) -> None:
+    def kill_bike(self) -> None:
         self.alive = False
 
     def has_hit_self(self) -> bool:
@@ -271,7 +283,7 @@ class TronEnv(gym.Env):
     ):
         """Number of opponents set by the length of opponent_choose_moves."""
 
-        self.choose_move_store = copy.deepcopy(opponent_choose_moves)
+        self.choose_move_store = deepcopy(opponent_choose_moves)
 
         self.opponent_choose_moves = opponent_choose_moves
         self.n_foods = self.n_opponents = len(self.opponent_choose_moves)
@@ -291,43 +303,43 @@ class TronEnv(gym.Env):
 
         random.shuffle(self.starting_positions)
 
-        self.player_snake = Bike(name="player", starting_position=self.starting_positions[0])
-        self.snakes = [self.player_snake]
-        self.snakes += [
+        self.player_bike = Bike(name="player", starting_position=self.starting_positions[0])
+        self.bikes = [self.player_bike]
+        self.bikes += [
             Bike(name=f"opponent_{idx}", starting_position=self.starting_positions[idx + 1])
             for idx in range(len(self.opponent_choose_moves))
         ]
         self.dead_snakes: List[Bike] = []
-        assert len(self.snakes) == len(self.opponent_choose_moves) + 1
+        assert len(self.bikes) == len(self.opponent_choose_moves) + 1
 
         # Aint no food no more
         self.generate_food()
 
         self.color_lookup = {
-            name: color for name, color in zip([snake.name for snake in self.snakes], SNAKE_COLORS)
+            name: color for name, color in zip([snake.name for snake in self.bikes], BIKE_COLORS)
         }
 
-        return self.get_snake_state(self.snakes[0]), 0, False, {}
+        return self.get_snake_state(self.bikes[0]), 0, False, {}
 
     @property
     def done(self) -> bool:
-        return not any([snake.name == "player" for snake in self.snakes]) or len(self.snakes) < 2
+        return not any([snake.name == "player" for snake in self.bikes]) or len(self.bikes) < 2
 
     def generate_food(self, eaten_pos: Optional[Tuple[int, int]] = None) -> None:
         """pass eaten_pos if a food has just been eaten."""
         # No food no more
         return
 
-    def _step(self, action: int, snake: Bike) -> None:
+    def _step(self, action: int, bike: Bike) -> None:
 
-        snake.take_action(action)
+        bike.take_action(action)
 
         if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
             raise ValueError(f"Invalid action: {action}")
 
-        if self.has_hit_tails(snake.head) or snake.has_hit_boundaries():
-            snake.kill_snake()
-        self.head_to_head_collision(snake)
+        if self.has_hit_tails(bike.head) or bike.has_hit_boundaries():
+            bike.kill_bike()
+        self.head_to_head_collision(bike)
 
         if self.verbose and self.num_steps_taken % 100 == 0:
             print(f"{self.num_steps_taken} steps taken")
@@ -335,17 +347,17 @@ class TronEnv(gym.Env):
         return
 
     def head_to_head_collision(self, snake: Bike) -> bool:
-        for other_snake in self.snakes:
+        for other_snake in self.bikes:
             if other_snake == snake:
                 continue
             if other_snake.head == snake.head:
-                other_snake.kill_snake()
-                snake.kill_snake()
+                other_snake.kill_bike()
+                snake.kill_bike()
                 return True
         return False
 
     def has_hit_tails(self, snake_head: Tuple[int, int]) -> bool:
-        for other_snake in self.snakes:
+        for other_snake in self.bikes:
             if snake_head in other_snake.body:
                 # Did other_snake kill with body, not suicide?
                 if snake_head != other_snake.head:
@@ -362,28 +374,28 @@ class TronEnv(gym.Env):
     def get_snake_state(self, snake: Bike) -> Dict:
         state: Dict[str, Any] = {}
         state["player"] = snake
-        state["opponents"] = [other_snake for other_snake in self.snakes if other_snake != snake]
+        state["opponents"] = [other_snake for other_snake in self.bikes if other_snake != snake]
 
         return state
 
     def step(self, action: int) -> Tuple:
 
         # Step player's snake
-        self._step(action, self.snakes[0])
+        self._step(action, self.bikes[0])
 
-        assert len(self.snakes) == len(self.opponent_choose_moves) + 1
-        for snake, choose_move in zip(self.snakes[1:], self.opponent_choose_moves):
+        assert len(self.bikes) == len(self.opponent_choose_moves) + 1
+        for snake, choose_move in zip(self.bikes[1:], self.opponent_choose_moves):
             if not self.done:
                 snake_state = self.get_snake_state(snake)
                 action = choose_move(snake_state)
                 self._step(action, snake)
 
         # Remove me
-        assert self.snakes[0] == self.player_snake
-        assert self.player_snake.name == "player"
+        assert self.bikes[0] == self.player_bike
+        assert self.player_bike.name == "player"
 
         idx_alive = []
-        for idx, snake in enumerate(self.snakes):
+        for idx, snake in enumerate(self.bikes):
             if not snake.alive:
                 if snake.name == "player":
                     self.player_dead = True
@@ -391,7 +403,7 @@ class TronEnv(gym.Env):
             else:
                 idx_alive.append(idx)
 
-        self.snakes = [self.snakes[idx] for idx in idx_alive]
+        self.bikes = [self.bikes[idx] for idx in idx_alive]
 
         self.opponent_choose_moves = [
             self.opponent_choose_moves[idx - 1] for idx in idx_alive if idx != 0
@@ -405,16 +417,16 @@ class TronEnv(gym.Env):
         reward = 0
         if self.done:
             winner = self.find_winner()
-            if winner is not None and winner == self.player_snake:
+            if winner is not None and winner == self.player_bike:
                 reward += 1
 
-        return self.get_snake_state(self.player_snake), reward, self.done, {}
+        return self.get_snake_state(self.player_bike), reward, self.done, {}
 
     def find_winner(self) -> Optional[Bike]:
         assert self.done
-        if len(self.snakes) == 0:
+        if len(self.bikes) == 0:
             return None
-        return self.snakes[np.argmax([snake.length for snake in self.snakes])]
+        return self.bikes[np.argmax([snake.length for snake in self.bikes])]
 
     def init_visuals(self) -> None:
         pygame.init()
@@ -439,7 +451,7 @@ class TronEnv(gym.Env):
         )
 
         # Draw snake
-        for snake in self.snakes:
+        for snake in self.bikes:
             color = self.color_lookup[snake.name]
 
             for snake_pos in snake.body:
@@ -484,6 +496,47 @@ def human_player(state) -> Optional[int]:
     return 1
 
 
-# def transition_function(state: Dict, action: int, bike_move: Bike) -> Dict:
-#     1 / 0
-#     pass
+# Functional reimplementation of some above logic
+def transition_function(state: Dict, action: int, bike_move: Bike) -> Dict:
+
+    state = state.copy()
+    bike_move = copy(bike_move)
+    state["player"] = copy(state["player"])
+    state["opponents"] = [copy(bike) for bike in state["opponents"]]
+
+    bike_move.take_action(action)
+
+    if has_hit_tails(bike_move.head, state) or bike_move.has_hit_boundaries():
+        bike_move.kill_bike()
+
+    state = head_to_head_collision(bike_move, state)
+
+    # If have the same name put the newly moved bike back in the state
+    if state["player"] == bike_move:
+        state["player"] = bike_move
+    else:
+        for idx, bike in enumerate(state["opponents"]):
+            if bike == bike_move:
+                state["opponents"][idx] = bike_move
+
+    return state
+
+
+def has_hit_tails(snake_head: Tuple[int, int], state: Dict) -> bool:
+    bikes = [state["player"]] + state["opponents"]
+    return any([snake_head in bike.body for bike in bikes])
+
+
+def head_to_head_collision(bike_move: Bike, state: Dict) -> Dict:
+    """Kill bikes involved in head to head collisions."""
+
+    bikes = [state["player"]] + state["opponents"]
+
+    for other_bike in bikes:
+        if other_bike == bike_move:
+            continue
+        if other_bike.head == bike_move.head:
+            other_bike.kill_bike()
+            bike_move.kill_bike()
+
+    return state

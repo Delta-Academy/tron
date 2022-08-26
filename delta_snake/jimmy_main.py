@@ -131,6 +131,7 @@ def n_games():
 
 if __name__ == "__main__":
 
+    pass
     # cProfile.run("n_games()", "profile.prof")
     # n_games()
 
@@ -176,7 +177,3 @@ if __name__ == "__main__":
     #     verbose=False,
     # )
     # train()
-    test()
-
-    # state, _, _, _ = TronEnv(opponent_choose_moves=[lambda x: x]).reset()
-    # transition_function(state, 0)
