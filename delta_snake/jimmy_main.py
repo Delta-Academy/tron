@@ -124,7 +124,6 @@ def n_games():
             n_steps += 1
         n_steps_list.append(n_steps)
 
-    # plt.hist(n_steps_list)
     plt.show()
     print(f"n steps = {np.mean(n_steps_list)}")
 
