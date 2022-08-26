@@ -17,13 +17,13 @@ from game_mechanics import (
     ARENA_HEIGHT,
     ARENA_WIDTH,
     HERE,
-    SnakeEnv,
+    TronEnv,
     choose_move_randomly,
     choose_move_square,
     human_player,
     load_network,
-    play_snake,
     save_network,
+    transition_function,
 )
 
 TEAM_NAME = "Team jimmy"  # <---- Enter your team name here!
@@ -55,7 +55,7 @@ def train() -> nn.Module:
 
     Returns:
     """
-    env = SnakeEnv([choose_move_square] * 2, verbose=False, render=False)
+    env = TronEnv([choose_move_square] * 2, verbose=False, render=False)
     env.reset()
 
     # model = PPO("CnnPolicy", env, verbose=2, ent_coef=0.01)
@@ -89,7 +89,7 @@ def choose_move(state: np.ndarray, network: Any) -> int:
 
 def test():
 
-    env = SnakeEnv([choose_move_square] * 2, verbose=False, render=True)
+    env = TronEnv([choose_move_square] * 2, verbose=False, render=True)
 
     state, reward, done, _ = env.reset()
     done = False
@@ -107,19 +107,20 @@ def test():
 
 def n_games():
 
-    env = SnakeEnv([choose_move_randomly] * 2, verbose=False, render=False)
+    env = TronEnv([choose_move_square] * 2, verbose=False, render=False)
     n = 3000
     n_steps_list = []
 
     for _ in tqdm(range(n)):
 
-        state = env.reset()
+        # state = env.reset()
+        state, reward, done, _ = env.reset()
         done = False
         n_steps = 0
 
         while not done:
 
-            action = choose_move_randomly(state)
+            action = choose_move_square(state)
             state, reward, done, _ = env.step(action)
             n_steps += 1
         n_steps_list.append(n_steps)
@@ -176,3 +177,6 @@ if __name__ == "__main__":
     # )
     # train()
     test()
+
+    # state, _, _, _ = TronEnv(opponent_choose_moves=[lambda x: x]).reset()
+    # transition_function(state, 0)

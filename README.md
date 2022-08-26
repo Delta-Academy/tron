@@ -1,46 +1,40 @@
-# Week three: Multiplayer battle snake
+# Week three: Multiplayer battle tron
 
-![Watch out for the sting in his tail](images/battlesnake.webp)
+![Drive your light cycle to victory](images/Tron.jpeg)
 
-## Rules of Snake :snake:
+## Rules of Tron :bullettrain_side:
 
-You control a Snake searching for delicious apples. :apple::apple::snake::apple::apple:
+You control a [LightCycle](https://en.wikipedia.org/wiki/Light_Cycle) and must defeat your enemies.
 
-You are navigating a grid. At each timestep, you can take 1 of 3 possible actions to navigate towards the food:
+You are navigating a grid. At each timestep, you can take 1 of 3 possible actions to navigate.
 
 1. Move forward
 2. Turn left
 3. Turn right.
 
-**Moving forward** will continue the Snake moving in the same direction 1 square.
+**Moving forward** will continue the bike moving in the same direction 1 square.
 
-**Turning left** or **right** will change the direction of the snake in that direction, and move the snake forward 1 square in that direction.
+**Turning left** or **right** will change the direction of the bike in that direction, and move the bike forward 1 square in that direction.
 
-### Points
+### The game
 
-For eating every apple **you score 1 point.** The snake also grows 1 block longer for each :apple: eaten. The block is added to the tail of the :snake:.
+Each step you drive forward, your light tail extends behind you
 
-If you **hit any walls** or you **collide with another snake** (including youself) then you die, and the **game ends**
+If you **hit any walls** or you **collide with another bike's tail** (including youself) then you die, and the **game ends**
 
-The game :joystick: will also end after `1000` steps
+You win and are rewarded if you are vanquish your opponents and remain the last bike standing.
 
 ### Opponents
 
-Unlike regular snake :snake:, you will share the arena with multiple **opponents**!
+You will share the arena with multiple **opponents**!
 
 These **opponents** are subject to the same rules and logic as you.
 
 Your **goal** is to defeat your opponents.
 
-The winner :boom: :boom: :boom: of the game is the either:
-
-- The last :snake: still alive
-  or
-- The snake with the highest number of points at the end of the time :hourglass:
-
 # Competition Rules :scroll:
 
-1. You must build an agent to play snake using either a **reinforcement learning** algorithm or a **heuristic search algorithm** (such as monte carlo tree search :deciduous_tree:)
+1. You must build an agent to play tron using either a **reinforcement learning** algorithm or a **heuristic search algorithm** (such as monte carlo tree search :deciduous_tree:)
 2. You can only write code in `main.py`
    - You can only store data to be used in a competition in a `.pt` file by `save_network()` (it is not mandatory to use this however).
    - In the competition, your agent will call the `choose_move()` function in `main.py` to select a move (`choose_move()` may call other functions in `main.py`)
@@ -61,17 +55,11 @@ The competition & discussion will be in [Gather Town](https://app.gather.town/ap
 
 ### Rewards :moneybag:
 
-The following **rewards** will be recieved in the **training environment**, however they may not map perfectly onto good performance in the tournament, so think carefully about how you use them.
-
 Your reward :moneybag: is:
 
-`+1` for eating an :apple:
-`+2` for murdering :knife: your opponent \*
-`+5` on the final step if you win the game
+`+1` for winning the game.
 
 Otherwise your reward is `0`
-
-\*They crash into your tail
 
 ### Observations each timestep :mag:
 
@@ -79,17 +67,16 @@ The **tuple** returned from each `env.step()` has:
 
 - A **dictionary** :book: describing the positions of objects on the board
 
-  - `player_snake`: **list** of **tuples** describing your snake's coordinates\* on the grid location
-  - `player_orientation`: **int** the orientation of your snake (see Orientation in game_mechanics)
-  - `opponent_snakes`: a **list** of **lists** of **tuples** decribing the living opponent snakes coordinates\*
-  - `opponent_orientations`: a **list** of **ints** describing the living opponent snakes orientations (see Orientation in game_mechanics)
-  - `food_location`: a **list** of **tuples**. Location of apples in the grid
+  - `player_bike`: **list** of **tuples** describing your bike's coordinates\* on the grid location
+  - `player_orientation`: **int** the orientation of your bike (see Orientation in game_mechanics)
+  - `opponent_bikes`: a **list** of **lists** of **tuples** decribing the living opponent bikes coordinates\*
+  - `opponent_orientations`: a **list** of **ints** describing the living opponent bikes orientations (see Orientation in game_mechanics)
 
 - The reward for each timestep
 - Whether the point is done (boolean)
 - Extra information
 
-\*The first tuple in the list is the head
+\*The first tuple in the list is the front of the bike
 
 ## Arena Layout
 
@@ -99,9 +86,7 @@ The width of the arena lies along the x-axis and the height along the y-axis.
 
 **Positions:** top left corner is at `(0, 0)`, the bottom right corner is at `(ARENA_WIDTH, ARENA_HEIGHT)` and the top right corner is at `(ARENA_WIDTH, 0)`.
 
-**Snake (blue tail = you, red tail = opponent)** moves East, West, North, and South. The snake cannot move diagonally.
-
-**Apple (in green**) yum!
+**Bikes (your bike is red)** moves East, West, North, and South. The bike cannot move diagonally.
 
 ## Functions you write :point_left:
 
@@ -123,32 +108,32 @@ In the competition, the choose_move() function is called to make your next move.
 ## Existing Code :pray:
 
 <details>
-<summary><code style="white-space:nowrap;">  SnakeEnv</code></summary>
+<summary><code style="white-space:nowrap;">  TronEnv</code></summary>
 The environment class controls the game and runs the opponents. It should be used for training your agent.
 <br />
 <br />
-See example usage in <code style="white-space:nowrap;">play_snake()</code>.
+See example usage in <code style="white-space:nowrap;">play_tron()</code>.
 <br />
 <br />
-The opponents' <code style="white-space:nowrap;">choose_move</code> functions are input at initialisation (when <code style="white-space:nowrap;">Env(opponent_choose_moves)</code> is called). Every time you call <code style="white-space:nowrap;">Env.step()</code>, all snakes make a move according to their choose_move function. All player's perspecitves on the arena is the same but they will recieve their own position as player_snake in the state dictionary.
+The opponents' <code style="white-space:nowrap;">choose_move</code> functions are input at initialisation (when <code style="white-space:nowrap;">Env(opponent_choose_moves)</code> is called). Every time you call <code style="white-space:nowrap;">Env.step()</code>, all bikes make a move according to their choose_move function. All player's perspecitves on the arena is the same but they will recieve their own position as player_bike in the state dictionary.
     <br />
     <br />
 
-<code style="white-space:nowrap;">SnakeEnv</code> has a <code style="white-space:nowrap;"> verbose</code> argument which prints the information about the game to the console when set to <code style="white-space:nowrap;">True</code>. <code style="white-space:nowrap;"> SnakeEnv</code> also has a render argument which visualises the game in pygame when set to <code style="white-space:nowrap;">True</code>. This allows you to visualise your AI's skills. You can play against your agent using the <code style="white-space:nowrap;">human_choose_move()</code> function!
+<code style="white-space:nowrap;">TronEnv</code> has a <code style="white-space:nowrap;"> verbose</code> argument which prints the information about the game to the console when set to <code style="white-space:nowrap;">True</code>. <code style="white-space:nowrap;"> TronEnv</code> also has a render argument which visualises the game in pygame when set to <code style="white-space:nowrap;">True</code>. This allows you to visualise your AI's skills. You can play against your agent using the <code style="white-space:nowrap;">human_choose_move()</code> function!
 
 </details>
 
 <details>
 <summary><code style="white-space:nowrap;"> choose_move_square()</code></summary>
-A basic snake bot that won't die immediately, a useful first opponent!
+A basic tron bot that won't die immediately, a useful first opponent!
 <br />
 <br />
 Takes the state as input and outputs an action.
 </details>
 
 <details>
-<summary><code style="white-space:nowrap;">  play_snake()</code></summary>
-Plays a game of snake, which can be rendered through pygame (if <code style="white-space:nowrap;">render=True</code>).
+<summary><code style="white-space:nowrap;">  play_tron()</code></summary>
+Plays a game of tron, which can be rendered through pygame (if <code style="white-space:nowrap;">render=True</code>).
 
 You can play against your own bot if you set <code style="white-space:nowrap;">your_choose_move</code> to <code style="white-space:nowrap;">human_player</code>!
 <br />

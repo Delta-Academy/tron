@@ -46,8 +46,8 @@ def choose_move_randomly(state: Dict) -> int:
 def choose_move_square(state: Dict) -> int:
     """This bot happily goes round the edge in a square."""
 
-    orientation = state["player_orientation"]
-    head = state["player_snake"][0]
+    orientation = state["player"].snake_direction
+    head = state["player"].snake_head
 
     if orientation == 0 and head[1] <= 3:
         return 3
@@ -87,14 +87,14 @@ def save_network(network: nn.Module, team_name: str) -> None:
                 raise
 
 
-def play_snake(
+def play_tron(
     your_choose_move: Callable,
     opponent_choose_moves: List[Callable],
     game_speed_multiplier: float = 1.0,
     render=True,
     verbose=False,
 ) -> float:
-    env = SnakeEnv(opponent_choose_moves=opponent_choose_moves, verbose=verbose, render=render)
+    env = TronEnv(opponent_choose_moves=opponent_choose_moves, verbose=verbose, render=render)
 
     state, reward, done, _ = env.reset()
     done = False
@@ -114,7 +114,7 @@ def wrap_position(pos: Tuple[int, int]) -> Tuple[int, int]:
     return pos
 
 
-def in_arena(pos: Tuple[int, int]):
+def in_arena(pos: Tuple[int, int]) -> bool:
     y_out = pos[1] <= 0 or pos[1] >= ARENA_HEIGHT - 1
     x_out = pos[0] <= 0 or pos[0] >= ARENA_WIDTH - 1
     return not x_out and not y_out
@@ -259,7 +259,7 @@ def get_starting_positions() -> List[Tuple[int, int]]:
     return positions
 
 
-class SnakeEnv(gym.Env):
+class TronEnv(gym.Env):
     def __init__(
         self,
         opponent_choose_moves: List[Callable],
@@ -318,10 +318,6 @@ class SnakeEnv(gym.Env):
 
     def _step(self, action: int, snake: Snake) -> None:
 
-        # For the human player only
-        if action is None:
-            return
-
         snake.take_action(action)
 
         if action not in [Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT]:
@@ -361,23 +357,10 @@ class SnakeEnv(gym.Env):
         mask[matrix.ndim * (slice(1, -1),)] = False
         return mask
 
-    def in_arena(self, pos: Tuple[int, int]):
-        return pos[0]
-
     def get_snake_state(self, snake: Snake) -> Dict:
-
-        # Thanks mypy
-        state: Dict[Any, Any] = {}
-
-        state["player_snake"] = snake.snake_positions
-        state["player_orientation"] = snake.snake_direction
-        state["opponent_snakes"] = [
-            other_snake.snake_positions for other_snake in self.snakes if other_snake != snake
-        ]
-
-        state["opponent_orientations"] = [
-            other_snake.snake_direction for other_snake in self.snakes if other_snake != snake
-        ]
+        state: Dict[str, Any] = {}
+        state["player"] = snake
+        state["opponents"] = [other_snake for other_snake in self.snakes if other_snake != snake]
 
         return state
 
@@ -496,5 +479,8 @@ def human_player(state) -> Optional[int]:
         return 2
     if is_key_pressed[pygame.K_UP]:
         return 1
+    return 1
 
-    return None
+
+def transition_function(state: Dict, action: int) -> Dict:
+    pass
