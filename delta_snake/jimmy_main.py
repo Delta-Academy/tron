@@ -131,9 +131,8 @@ def n_games():
 
 if __name__ == "__main__":
 
-    pass
     # cProfile.run("n_games()", "profile.prof")
-    # n_games()
+    #   n_games()
 
     # ## Example workflow, feel free to edit this! ###
     # network = train()
@@ -177,3 +176,10 @@ if __name__ == "__main__":
     #     verbose=False,
     # )
     # train()
+    test()
+
+
+# TODO:
+# Make state a class
+# Update README
+# write choose_move timer

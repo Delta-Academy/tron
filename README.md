@@ -65,22 +65,25 @@ Otherwise your reward is `0`
 
 The **tuple** returned from each `env.step()` has:
 
-- A **dictionary** :book: describing the positions of objects on the board
+- A **state object** describing the positions of objects on the board
 
-  - `player_bike`: **list** of **tuples** describing your bike's coordinates\* on the grid location
-  - `player_orientation`: **int** the orientation of your bike (see Orientation in game_mechanics)
-  - `opponent_bikes`: a **list** of **lists** of **tuples** decribing the living opponent bikes coordinates\*
-  - `opponent_orientations`: a **list** of **ints** describing the living opponent bikes orientations (see Orientation in game_mechanics)
+  - `player`: A Bike object containing information about your bike
+  - `opponents`: A list of Bike objects containing information about your opponents
 
 - The reward for each timestep
 - Whether the point is done (boolean)
 - Extra information
 
-\*The first tuple in the list is the front of the bike
+### The Bike object
+**Useful attributes**
+
+- `positions` a list of tuple coords, where the bike in space (head first)
+- `direction` which way you're facing. (see the Orientation object)
+- `alive` are you a deceased bike
 
 ## Arena Layout
 
-The court is`ARENA_WIDTH` wide and`ARENA_HEIGHT`tall.
+The arena is `ARENA_WIDTH` wide and`ARENA_HEIGHT`tall.
 
 The width of the arena lies along the x-axis and the height along the y-axis.
 
@@ -115,7 +118,7 @@ The environment class controls the game and runs the opponents. It should be use
 See example usage in <code style="white-space:nowrap;">play_tron()</code>.
 <br />
 <br />
-The opponents' <code style="white-space:nowrap;">choose_move</code> functions are input at initialisation (when <code style="white-space:nowrap;">Env(opponent_choose_moves)</code> is called). Every time you call <code style="white-space:nowrap;">Env.step()</code>, all bikes make a move according to their choose_move function. All player's perspecitves on the arena is the same but they will recieve their own position as player_bike in the state dictionary.
+The opponents' <code style="white-space:nowrap;">choose_move</code> functions are input at initialisation (when <code style="white-space:nowrap;">Env(opponent_choose_moves)</code> is called). Every time you call <code style="white-space:nowrap;">Env.step()</code>, all bikes make a move according to their choose_move function. All player's perspecitves on the arena is the same but they will recieve their own position as player_bike in the state object.
     <br />
     <br />
 

@@ -1,3 +1,4 @@
+import time
 from typing import Any, Dict
 
 import numpy as np
@@ -46,10 +47,6 @@ if __name__ == "__main__":
     network = train()
     save_network(network, TEAM_NAME)
 
-    # check_submission(
-    #     TEAM_NAME
-    # )  # <---- Make sure I pass! Or your solution will not work in the tournament!!
-
     my_network = load_network(TEAM_NAME)
 
     # Code below plays a single game against a random
@@ -60,7 +57,12 @@ if __name__ == "__main__":
 
         This converts choose_move() to that format.
         """
+        time.sleep(1)
         return choose_move(state, my_network)
+
+    check_submission(
+        TEAM_NAME, choose_move_no_network
+    )  # <---- Make sure I pass! Or your solution will not work in the tournament!!
 
     # Play against your bot!
     play_tron(

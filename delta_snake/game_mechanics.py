@@ -1,6 +1,8 @@
 import random
 import time
 from copy import copy, deepcopy
+from dataclasses import dataclass
+from itertools import chain
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -12,13 +14,10 @@ from torch import nn
 
 ARENA_WIDTH = 51
 ARENA_HEIGHT = 51
-BLOCK_SIZE = 10
+BLOCK_SIZE = 20
 
 assert ARENA_HEIGHT == ARENA_WIDTH, "current only support square arenas"
 
-
-SCREEN_WIDTH = ARENA_WIDTH * BLOCK_SIZE
-SCREEN_HEIGHT = ARENA_HEIGHT * BLOCK_SIZE
 
 TAIL_STARTING_LENGTH = 1
 
@@ -38,16 +37,32 @@ BIKE_COLORS = [
 HERE = Path(__file__).parent.resolve()
 
 
-def choose_move_randomly(state: Dict) -> int:
+@dataclass
+class State:
+    player: "Bike"
+    opponents: List["Bike"]
+
+    @property
+    def state_id(self) -> str:
+        """Unique identifier of state."""
+        # Ensure opponents always in the same order by position
+        self.opponents.sort(key=lambda x: sum(chain(*x.positions)))
+        s = f"player:{self.player.bike_state}"
+        for opponent in self.opponents:
+            s += f"opponent{opponent.bike_state}"
+        return s
+
+
+def choose_move_randomly(state: State) -> int:
     """This works but the bots die very fast."""
     return int(random.random() * 3) + 1
 
 
-def choose_move_square(state: Dict) -> int:
+def choose_move_square(state: State) -> int:
     """This bot happily goes round the edge in a square."""
 
-    orientation = state["player"].direction
-    head = state["player"].head
+    orientation = state.player.direction
+    head = state.player.head
 
     if orientation == 0 and head[1] <= 3:
         return 3
@@ -58,33 +73,6 @@ def choose_move_square(state: Dict) -> int:
     if orientation == 1 and head[0] >= ARENA_WIDTH - 3:
         return 3
     return 1
-
-
-def load_network(team_name: str, network_folder: Path = HERE) -> nn.Module:
-    net_path = network_folder / f"{team_name}_network.pt"
-    assert (
-        net_path.exists()
-    ), f"Network saved using TEAM_NAME='{team_name}' doesn't exist! ({net_path})"
-    model = torch.load(str(HERE / net_path))
-    model.eval()
-    return model
-
-
-def save_network(network: nn.Module, team_name: str) -> None:
-    assert isinstance(
-        network, nn.Module
-    ), f"train() function outputs an network type: {type(network)}"
-    assert "/" not in team_name, "Invalid TEAM_NAME. '/' are illegal in TEAM_NAME"
-    net_path = HERE / f"{team_name}_network.pt"
-    n_retries = 5
-    for attempt in range(n_retries):
-        try:
-            torch.save(network, net_path)
-            load_network(str(HERE / team_name))
-            return
-        except Exception:
-            if attempt == n_retries - 1:
-                raise
 
 
 def play_tron(
@@ -187,7 +175,6 @@ class Bike:
         return self.name == other.name
 
     def __copy__(self) -> "Bike":
-        print("OOOH i be copying")
         positions = deepcopy(self.positions)
         cls = self.__class__
         result = cls.__new__(cls)
@@ -214,6 +201,14 @@ class Bike:
     @property
     def head(self) -> Tuple[int, int]:
         return self.positions[0]
+
+    @property
+    def bike_state(self) -> str:
+        """Describes fully the state of a bike.
+
+        Can be used as a dictionary key
+        """
+        return f"position{self.positions}alive{self.alive}direction{self.direction}"
 
     @property
     def body(self) -> List[Tuple[int, int]]:
@@ -274,6 +269,10 @@ def get_starting_positions() -> List[Tuple[int, int]]:
 
 
 class TronEnv(gym.Env):
+
+    SCREEN_WIDTH = ARENA_WIDTH * BLOCK_SIZE
+    SCREEN_HEIGHT = ARENA_HEIGHT * BLOCK_SIZE
+
     def __init__(
         self,
         opponent_choose_moves: List[Callable],
@@ -296,7 +295,7 @@ class TronEnv(gym.Env):
         if self._render:
             self.init_visuals()
 
-    def reset(self) -> Tuple[Dict, int, bool, Dict]:
+    def reset(self) -> Tuple[State, int, bool, Dict]:
         self.opponent_choose_moves = self.choose_move_store
         self.player_dead = False
         self.num_steps_taken = 0
@@ -309,7 +308,7 @@ class TronEnv(gym.Env):
             Bike(name=f"opponent_{idx}", starting_position=self.starting_positions[idx + 1])
             for idx in range(len(self.opponent_choose_moves))
         ]
-        self.dead_snakes: List[Bike] = []
+        self.dead_bikes: List[Bike] = []
         assert len(self.bikes) == len(self.opponent_choose_moves) + 1
 
         # Aint no food no more
@@ -319,11 +318,13 @@ class TronEnv(gym.Env):
             name: color for name, color in zip([snake.name for snake in self.bikes], BIKE_COLORS)
         }
 
-        return self.get_snake_state(self.bikes[0]), 0, False, {}
+        return self.get_bike_state(self.bikes[0]), 0, False, {}
 
     @property
     def done(self) -> bool:
-        return not any([snake.name == "player" for snake in self.bikes]) or len(self.bikes) < 2
+        # return not any([snake.name == "player" for snake in self.bikes]) or len(self.bikes) < 2
+        # Change me back
+        return sum([bike.alive for bike in self.bikes]) < 2
 
     def generate_food(self, eaten_pos: Optional[Tuple[int, int]] = None) -> None:
         """pass eaten_pos if a food has just been eaten."""
@@ -371,37 +372,44 @@ class TronEnv(gym.Env):
         mask[matrix.ndim * (slice(1, -1),)] = False
         return mask
 
-    def get_snake_state(self, snake: Bike) -> Dict:
-        state: Dict[str, Any] = {}
-        state["player"] = snake
-        state["opponents"] = [other_snake for other_snake in self.bikes if other_snake != snake]
+    def get_bike_state(self, bike: Bike) -> State:
+        return State(
+            player=bike,
+            opponents=[other_snake for other_snake in self.bikes if other_snake != bike],
+        )
 
-        return state
-
-    def step(self, action: int) -> Tuple:
+    def step(self, action: int) -> Tuple[State, int, bool, Dict]:
 
         # Step player's snake
-        self._step(action, self.bikes[0])
+        # Temporary fix
+        if not self.player_dead:
+            self._step(action, self.bikes[0])
 
         assert len(self.bikes) == len(self.opponent_choose_moves) + 1
-        for snake, choose_move in zip(self.bikes[1:], self.opponent_choose_moves):
+        for bike, choose_move in zip(self.bikes[1:], self.opponent_choose_moves):
             if not self.done:
-                snake_state = self.get_snake_state(snake)
-                action = choose_move(snake_state)
-                self._step(action, snake)
+                snake_state = self.get_bike_state(bike)
+                action = choose_move(state=snake_state)
+                self._step(action, bike)
 
         # Remove me
         assert self.bikes[0] == self.player_bike
         assert self.player_bike.name == "player"
 
         idx_alive = []
-        for idx, snake in enumerate(self.bikes):
-            if not snake.alive:
-                if snake.name == "player":
+        for idx, bike in enumerate(self.bikes):
+            if not bike.alive:
+                if bike.name == "player":
                     self.player_dead = True
-                self.dead_snakes.append(snake)
+                self.dead_bikes.append(bike)
             else:
                 idx_alive.append(idx)
+
+        # Temporary fix
+        if self.player_dead:
+            idx_alive.insert(0, 0)
+            # temp fix so don't crash into dead player snake
+            self.bikes[0].set_positions([(-100, -100)])
 
         self.bikes = [self.bikes[idx] for idx in idx_alive]
 
@@ -420,7 +428,7 @@ class TronEnv(gym.Env):
             if winner is not None and winner == self.player_bike:
                 reward += 1
 
-        return self.get_snake_state(self.player_bike), reward, self.done, {}
+        return self.get_bike_state(self.player_bike), reward, self.done, {}
 
     def find_winner(self) -> Optional[Bike]:
         assert self.done
@@ -431,27 +439,33 @@ class TronEnv(gym.Env):
     def init_visuals(self) -> None:
         pygame.init()
         self.screen = pygame.display.set_mode(
-            (ARENA_WIDTH * BLOCK_SIZE, ARENA_HEIGHT * BLOCK_SIZE), pygame.FULLSCREEN
+            (ARENA_WIDTH * BLOCK_SIZE, ARENA_HEIGHT * BLOCK_SIZE)  # , pygame.FULLSCREEN
         )
         pygame.display.set_caption("Snake Game")
         self.clock = pygame.time.Clock()
         self.screen.fill(WHITE)
         self.score_font = pygame.font.SysFont("comicsansms", 35)
 
-    def render_game(self) -> None:
+    def render_game(self, screen: Optional[pygame.Surface] = None) -> None:
+
+        if screen is None:
+            screen = self.screen
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 quit()
 
-        self.screen.fill(WHITE)
+        screen.fill(WHITE)
         # Draw boundaries
         pygame.draw.rect(
-            self.screen, BLACK, [1, 1, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1], width=BLOCK_SIZE
+            screen, BLACK, [1, 1, self.SCREEN_WIDTH - 1, self.SCREEN_HEIGHT - 1], width=BLOCK_SIZE
         )
 
         # Draw snake
         for snake in self.bikes:
+            # if not snake.alive:
+            #     continue
+
             color = self.color_lookup[snake.name]
 
             for snake_pos in snake.body:
@@ -459,14 +473,14 @@ class TronEnv(gym.Env):
                     ARENA_HEIGHT - snake_pos[1] - 1
                 )  # Flip y axis because pygame counts 0,0 as top left
                 pygame.draw.rect(
-                    self.screen,
+                    screen,
                     color,
                     [snake_pos[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
                 )
             # Flip y axis because pygame counts 0,0 as top left
             snake_y = ARENA_HEIGHT - snake.head[1] - 1
             pygame.draw.rect(
-                self.screen,
+                screen,
                 BLACK,
                 [
                     snake.head[0] * BLOCK_SIZE,
@@ -476,11 +490,11 @@ class TronEnv(gym.Env):
                 ],
             )
 
-        pygame.display.update()
+        # Put me back in
+        # pygame.display.update()
 
 
 def human_player(state) -> Optional[int]:
-    """Controls quite janky."""
     for event in pygame.event.get():
         if event.type == pygame.QUIT or (
             event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
@@ -497,12 +511,12 @@ def human_player(state) -> Optional[int]:
 
 
 # Functional reimplementation of some above logic
-def transition_function(state: Dict, action: int, bike_move: Bike) -> Dict:
+def transition_function(state: State, action: int, bike_move: Bike) -> State:
 
-    state = state.copy()
+    state = copy(state)
     bike_move = copy(bike_move)
-    state["player"] = copy(state["player"])
-    state["opponents"] = [copy(bike) for bike in state["opponents"]]
+    state.player = copy(state.player)
+    state.opponents = [copy(bike) for bike in state.opponents]
 
     bike_move.take_action(action)
 
@@ -511,26 +525,31 @@ def transition_function(state: Dict, action: int, bike_move: Bike) -> Dict:
 
     state = head_to_head_collision(bike_move, state)
 
-    # If have the same name put the newly moved bike back in the state
-    if state["player"] == bike_move:
-        state["player"] = bike_move
+    # Put the newly moved bike back in the state copy
+    if state.player == bike_move:
+        state.player = bike_move
     else:
-        for idx, bike in enumerate(state["opponents"]):
+        for idx, bike in enumerate(state.opponents):
             if bike == bike_move:
-                state["opponents"][idx] = bike_move
+                state.opponents[idx] = bike_move
 
     return state
 
 
-def has_hit_tails(snake_head: Tuple[int, int], state: Dict) -> bool:
-    bikes = [state["player"]] + state["opponents"]
+def reward_function(successor_state: State, bike_move: Bike) -> int:
+    bikes = [successor_state.player] + successor_state.opponents
+    return int(all([not bike.alive for bike in bikes if bike != bike_move]) and bike_move.alive)
+
+
+def has_hit_tails(snake_head: Tuple[int, int], state: State) -> bool:
+    bikes = [state.player] + state.opponents
     return any([snake_head in bike.body for bike in bikes])
 
 
-def head_to_head_collision(bike_move: Bike, state: Dict) -> Dict:
+def head_to_head_collision(bike_move: Bike, state: State) -> State:
     """Kill bikes involved in head to head collisions."""
 
-    bikes = [state["player"]] + state["opponents"]
+    bikes = [state.player] + state.opponents
 
     for other_bike in bikes:
         if other_bike == bike_move:
@@ -540,3 +559,35 @@ def head_to_head_collision(bike_move: Bike, state: Dict) -> Dict:
             bike_move.kill_bike()
 
     return state
+
+
+def is_terminal(successor_state: State) -> bool:
+    bikes = [successor_state.player] + successor_state.opponents
+    return not successor_state.player.alive or sum([bike.alive for bike in bikes]) < 2
+
+
+def load_network(team_name: str, network_folder: Path = HERE) -> nn.Module:
+    net_path = network_folder / f"{team_name}_network.pt"
+    assert (
+        net_path.exists()
+    ), f"Network saved using TEAM_NAME='{team_name}' doesn't exist! ({net_path})"
+    model = torch.load(str(HERE / net_path))
+    model.eval()
+    return model
+
+
+def save_network(network: nn.Module, team_name: str) -> None:
+    assert isinstance(
+        network, nn.Module
+    ), f"train() function outputs an network type: {type(network)}"
+    assert "/" not in team_name, "Invalid TEAM_NAME. '/' are illegal in TEAM_NAME"
+    net_path = HERE / f"{team_name}_network.pt"
+    n_retries = 5
+    for attempt in range(n_retries):
+        try:
+            torch.save(network, net_path)
+            load_network(str(HERE / team_name))
+            return
+        except Exception:
+            if attempt == n_retries - 1:
+                raise
