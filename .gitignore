@@ -14,8 +14,8 @@ rankings/
 team_store/
 *.pkl
 !*winner.pkl
-*.zip
 *.prof
+checkpoints/
 
 
 

@@ -6,15 +6,16 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import gym
 import numpy as np
+
+import gym
 import pygame
 import torch
 from torch import nn
 
-ARENA_WIDTH = 51
-ARENA_HEIGHT = 51
-BLOCK_SIZE = 20
+ARENA_WIDTH = 15
+ARENA_HEIGHT = 15
+BLOCK_SIZE = 50
 
 assert ARENA_HEIGHT == ARENA_WIDTH, "current only support square arenas"
 
@@ -79,10 +80,15 @@ def play_tron(
     your_choose_move: Callable,
     opponent_choose_moves: List[Callable],
     game_speed_multiplier: float = 1.0,
-    render=True,
-    verbose=False,
+    render: bool = True,
+    verbose: bool = False,
 ) -> float:
-    env = TronEnv(opponent_choose_moves=opponent_choose_moves, verbose=verbose, render=render)
+    env = TronEnv(
+        opponent_choose_moves=opponent_choose_moves,
+        verbose=verbose,
+        render=render,
+        game_speed_multiplier=game_speed_multiplier,
+    )
 
     state, reward, done, _ = env.reset()
     done = False
@@ -91,15 +97,9 @@ def play_tron(
     while not done:
         action = your_choose_move(state)
         state, reward, done, _ = env.step(action)
-        time.sleep(1 / game_speed_multiplier)
         return_ += reward
 
     return return_
-
-
-def wrap_position(pos: Tuple[int, int]) -> Tuple[int, int]:
-    # wrapping taken out
-    return pos
 
 
 def in_arena(pos: Tuple[int, int]) -> bool:
@@ -236,7 +236,7 @@ class Bike:
             self.positions.insert(0, (x, y))
             self.direction = new_orientation
 
-        self.positions = [wrap_position(pos) for pos in self.positions]
+        self.positions = list(self.positions)
 
     def remove_tail_end(self) -> None:
         del self.positions[-1]
@@ -278,7 +278,7 @@ class TronEnv(gym.Env):
         opponent_choose_moves: List[Callable],
         verbose: bool = False,
         render: bool = False,
-        game_speed_multiplier: int = 1,
+        game_speed_multiplier: float = 1.0,
     ):
         """Number of opponents set by the length of opponent_choose_moves."""
 
@@ -312,24 +312,16 @@ class TronEnv(gym.Env):
         assert len(self.bikes) == len(self.opponent_choose_moves) + 1
 
         # Aint no food no more
-        self.generate_food()
 
-        self.color_lookup = {
-            name: color for name, color in zip([snake.name for snake in self.bikes], BIKE_COLORS)
-        }
+        self.color_lookup = dict(zip([snake.name for snake in self.bikes], BIKE_COLORS))
 
         return self.get_bike_state(self.bikes[0]), 0, False, {}
 
     @property
     def done(self) -> bool:
-        # return not any([snake.name == "player" for snake in self.bikes]) or len(self.bikes) < 2
+        return not any([snake.name == "player" for snake in self.bikes]) or len(self.bikes) < 2
         # Change me back
-        return sum([bike.alive for bike in self.bikes]) < 2
-
-    def generate_food(self, eaten_pos: Optional[Tuple[int, int]] = None) -> None:
-        """pass eaten_pos if a food has just been eaten."""
-        # No food no more
-        return
+        # return sum(bike.alive for bike in self.bikes) < 2
 
     def _step(self, action: int, bike: Bike) -> None:
 
@@ -392,10 +384,6 @@ class TronEnv(gym.Env):
                 action = choose_move(state=snake_state)
                 self._step(action, bike)
 
-        # Remove me
-        assert self.bikes[0] == self.player_bike
-        assert self.player_bike.name == "player"
-
         idx_alive = []
         for idx, bike in enumerate(self.bikes):
             if not bike.alive:
@@ -418,6 +406,7 @@ class TronEnv(gym.Env):
         ]
 
         if self._render:
+            time.sleep(1 / self.game_speed_multiplier)
             self.render_game()
 
         self.num_steps_taken += 1
@@ -491,10 +480,11 @@ class TronEnv(gym.Env):
             )
 
         # Put me back in
-        # pygame.display.update()
+        pygame.display.update()
 
 
 def human_player(state) -> Optional[int]:
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT or (
             event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
@@ -505,8 +495,6 @@ def human_player(state) -> Optional[int]:
         return 3
     elif is_key_pressed[pygame.K_LEFT]:
         return 2
-    if is_key_pressed[pygame.K_UP]:
-        return 1
     return 1
 
 
