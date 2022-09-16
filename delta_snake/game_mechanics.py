@@ -296,6 +296,7 @@ class TronEnv(gym.Env):
             self.init_visuals()
 
     def reset(self) -> Tuple[State, int, bool, Dict]:
+
         self.opponent_choose_moves = self.choose_move_store
         self.player_dead = False
         self.num_steps_taken = 0
@@ -311,16 +312,13 @@ class TronEnv(gym.Env):
         self.dead_bikes: List[Bike] = []
         assert len(self.bikes) == len(self.opponent_choose_moves) + 1
 
-        # Aint no food no more
-
         self.color_lookup = dict(zip([bike.name for bike in self.bikes], BIKE_COLORS))
-
         return self.get_bike_state(self.bikes[0]), 0, False, {}
 
     @property
     def done(self) -> bool:
-        return not any([bike.name == "player" for bike in self.bikes]) or len(self.bikes) < 2
-        # Change me back
+        return self.player_dead or len(self.bikes) < 2
+        # Need this for the tournament
         # return sum(bike.alive for bike in self.bikes) < 2
 
     def _step(self, action: int, bike: Bike) -> None:
@@ -372,8 +370,7 @@ class TronEnv(gym.Env):
 
     def step(self, action: int) -> Tuple[State, int, bool, Dict]:
 
-        # Step player's bike
-        # Temporary fix
+        # Step the player's bike if its not dead (tournament)
         if not self.player_dead:
             self._step(action, self.bikes[0])
 
@@ -393,10 +390,9 @@ class TronEnv(gym.Env):
             else:
                 idx_alive.append(idx)
 
-        # Temporary fix
         if self.player_dead:
             idx_alive.insert(0, 0)
-            # temp fix so don't crash into dead player bike
+            # Make sure you don't crash into dead bikes
             self.bikes[0].set_positions([(-100, -100)])
 
         self.bikes = [self.bikes[idx] for idx in idx_alive]
@@ -406,8 +402,8 @@ class TronEnv(gym.Env):
         ]
 
         if self._render:
-            time.sleep(1 / self.game_speed_multiplier)
             self.render_game()
+            time.sleep(1 / self.game_speed_multiplier)
 
         self.num_steps_taken += 1
 
@@ -440,20 +436,14 @@ class TronEnv(gym.Env):
         if screen is None:
             screen = self.screen
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                quit()
-
         screen.fill(WHITE)
+
         # Draw boundaries
         pygame.draw.rect(
             screen, BLACK, [1, 1, self.SCREEN_WIDTH - 1, self.SCREEN_HEIGHT - 1], width=BLOCK_SIZE
         )
 
-        # Draw bike
         for bike in self.bikes:
-            # if not bike.alive:
-            #     continue
 
             color = self.color_lookup[bike.name]
 
@@ -479,22 +469,17 @@ class TronEnv(gym.Env):
                 ],
             )
 
-        # Put me back in
+        # This may cause flashing in the tournament
         pygame.display.update()
 
 
-def human_player(state) -> Optional[int]:
-
+def human_player(*args: Any, **kwargs: Any) -> int:
     for event in pygame.event.get():
-        if event.type == pygame.QUIT or (
-            event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
-        ):
-            quit()
-    is_key_pressed = pygame.key.get_pressed()
-    if is_key_pressed[pygame.K_RIGHT]:
-        return 3
-    elif is_key_pressed[pygame.K_LEFT]:
-        return 2
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RIGHT:
+                return 3
+            if event.key == pygame.K_LEFT:
+                return 2
     return 1
 
 
@@ -551,31 +536,4 @@ def head_to_head_collision(bike_move: Bike, state: State) -> State:
 
 def is_terminal(successor_state: State) -> bool:
     bikes = [successor_state.player] + successor_state.opponents
-    return not successor_state.player.alive or sum([bike.alive for bike in bikes]) < 2
-
-
-def load_network(team_name: str, network_folder: Path = HERE) -> nn.Module:
-    net_path = network_folder / f"{team_name}_network.pt"
-    assert (
-        net_path.exists()
-    ), f"Network saved using TEAM_NAME='{team_name}' doesn't exist! ({net_path})"
-    model = torch.load(str(HERE / net_path))
-    model.eval()
-    return model
-
-
-def save_network(network: nn.Module, team_name: str) -> None:
-    assert isinstance(
-        network, nn.Module
-    ), f"train() function outputs an network type: {type(network)}"
-    assert "/" not in team_name, "Invalid TEAM_NAME. '/' are illegal in TEAM_NAME"
-    net_path = HERE / f"{team_name}_network.pt"
-    n_retries = 5
-    for attempt in range(n_retries):
-        try:
-            torch.save(network, net_path)
-            load_network(str(HERE / team_name))
-            return
-        except Exception:
-            if attempt == n_retries - 1:
-                raise
+    return not successor_state.player.alive or sum(bike.alive for bike in bikes) < 2

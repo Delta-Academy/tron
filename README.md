@@ -94,13 +94,6 @@ The width of the arena lies along the x-axis and the height along the y-axis.
 ## Functions you write :point_left:
 
 <details>
-<summary><code style="white-space:nowrap;">  train()</code></summary>
-Write this to train your algorithm from experience in the environment.
-<br />
-<br />
-(Optional) Return a trained network so it can be saved.
-</details>
-<details>
 <summary><code style="white-space:nowrap;">  choose_move()</code></summary>
 This acts greedily given the state and network.
 
@@ -158,6 +151,5 @@ Inputs:
 ## Suggested Approach :+1:
 
 1. Use monte carlo tree search to simlulate possible future trajectories>
-2. **Write `train()`**, borrowing from past exercises
-3. **Iterate, iterate, iterate** on that `train()` function
-4. **Print out important values** - otherwise bugs in your code may slip through the cracks :astonished:
+2. **Iterate, iterate, iterate** on that `train()` function
+3. **Print out important values** - otherwise bugs in your code may slip through the cracks :astonished:
