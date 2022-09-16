@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import numpy as np
 
-from delta_snake.game_mechanics import TronEnv, transition_function
+from delta_bike.game_mechanics import TronEnv, transition_function
 
 
 def test_transition_function_one_step() -> None:

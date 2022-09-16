@@ -4,14 +4,8 @@ import time
 from typing import Any, Dict
 
 import numpy as np
-import pygame
-from matplotlib import pyplot as plt
-from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.utils import safe_mean
-from torch import nn
-from tqdm import tqdm
 
+import pygame
 from check_submission import check_submission
 from game_mechanics import (
     ARENA_HEIGHT,
@@ -25,6 +19,12 @@ from game_mechanics import (
     save_network,
     transition_function,
 )
+from matplotlib import pyplot as plt
+from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.utils import safe_mean
+from torch import nn
+from tqdm import tqdm
 
 TEAM_NAME = "Team jimmy"  # <---- Enter your team name here!
 assert TEAM_NAME != "Team Name", "Please change your TEAM_NAME!"
@@ -159,7 +159,7 @@ if __name__ == "__main__":
     # def choose_move_model(state) -> int:
     #     return model.predict(state.copy())[0] + 1
 
-    # play_snake(
+    # play_bike(
     #     your_choose_move=choose_move_model,
     #     opponent_choose_moves=[choose_move_model] * 3,
     #     game_speed_multiplier=0.1,
@@ -167,7 +167,7 @@ if __name__ == "__main__":
     #     verbose=False,
     # )
 
-    # play_snake(
+    # play_bike(
     #     your_choose_move=human_player,
     #     # opponent_choose_moves=[choose_move_model] * 1,
     #     opponent_choose_moves=[lambda x: None] * 1,

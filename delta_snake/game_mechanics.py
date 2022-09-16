@@ -109,9 +109,9 @@ def in_arena(pos: Tuple[int, int]) -> bool:
 
 
 class Action:
-    """The action taken by the snake.
+    """The action taken by the bike.
 
-    The snake has 3 options:
+    The bike has 3 options:
         1. Go forward
         2. Turn left (and go forward 1 step)
         3. Turn right (and go forward 1 step)
@@ -123,7 +123,7 @@ class Action:
 
 
 class Orientation:
-    """Direction the snake is pointing."""
+    """Direction the bike is pointing."""
 
     SOUTH = 0  # negative y-direction
     EAST = 1  # positive x-direction
@@ -141,29 +141,29 @@ class Bike:
         )
 
         if starting_position is None:
-            snake_head_x = random.randint(ARENA_WIDTH // 4, 3 * ARENA_WIDTH // 4)
-            snake_head_y = random.randint(ARENA_HEIGHT // 4, 3 * ARENA_HEIGHT // 4)
+            bike_head_x = random.randint(ARENA_WIDTH // 4, 3 * ARENA_WIDTH // 4)
+            bike_head_y = random.randint(ARENA_HEIGHT // 4, 3 * ARENA_HEIGHT // 4)
         else:
-            snake_head_x, snake_head_y = starting_position
+            bike_head_x, bike_head_y = starting_position
 
-        self.positions = [(snake_head_x, snake_head_y)]
+        self.positions = [(bike_head_x, bike_head_y)]
 
         for offset in range(1, TAIL_STARTING_LENGTH + 1):
-            snake_tail_x = (
-                snake_head_x - offset
+            bike_tail_x = (
+                bike_head_x - offset
                 if self.direction == Orientation.EAST
-                else snake_head_x + offset
+                else bike_head_x + offset
                 if self.direction == Orientation.WEST
-                else snake_head_x
+                else bike_head_x
             )
-            snake_tail_y = (
-                snake_head_y - offset
+            bike_tail_y = (
+                bike_head_y - offset
                 if self.direction == Orientation.NORTH
-                else snake_head_y + offset
+                else bike_head_y + offset
                 if self.direction == Orientation.SOUTH
-                else snake_head_y
+                else bike_head_y
             )
-            self.positions.append((snake_tail_x, snake_tail_y))
+            self.positions.append((bike_tail_x, bike_tail_y))
 
         self.alive = True
         self.name = name
@@ -313,13 +313,13 @@ class TronEnv(gym.Env):
 
         # Aint no food no more
 
-        self.color_lookup = dict(zip([snake.name for snake in self.bikes], BIKE_COLORS))
+        self.color_lookup = dict(zip([bike.name for bike in self.bikes], BIKE_COLORS))
 
         return self.get_bike_state(self.bikes[0]), 0, False, {}
 
     @property
     def done(self) -> bool:
-        return not any([snake.name == "player" for snake in self.bikes]) or len(self.bikes) < 2
+        return not any([bike.name == "player" for bike in self.bikes]) or len(self.bikes) < 2
         # Change me back
         # return sum(bike.alive for bike in self.bikes) < 2
 
@@ -339,22 +339,22 @@ class TronEnv(gym.Env):
 
         return
 
-    def head_to_head_collision(self, snake: Bike) -> bool:
-        for other_snake in self.bikes:
-            if other_snake == snake:
+    def head_to_head_collision(self, bike: Bike) -> bool:
+        for other_bike in self.bikes:
+            if other_bike == bike:
                 continue
-            if other_snake.head == snake.head:
-                other_snake.kill_bike()
-                snake.kill_bike()
+            if other_bike.head == bike.head:
+                other_bike.kill_bike()
+                bike.kill_bike()
                 return True
         return False
 
-    def has_hit_tails(self, snake_head: Tuple[int, int]) -> bool:
-        for other_snake in self.bikes:
-            if snake_head in other_snake.body:
-                # Did other_snake kill with body, not suicide?
-                if snake_head != other_snake.head:
-                    other_snake.make_a_murderer()
+    def has_hit_tails(self, bike_head: Tuple[int, int]) -> bool:
+        for other_bike in self.bikes:
+            if bike_head in other_bike.body:
+                # Did other_bike kill with body, not suicide?
+                if bike_head != other_bike.head:
+                    other_bike.make_a_murderer()
                 return True
         return False
 
@@ -367,12 +367,12 @@ class TronEnv(gym.Env):
     def get_bike_state(self, bike: Bike) -> State:
         return State(
             player=bike,
-            opponents=[other_snake for other_snake in self.bikes if other_snake != bike],
+            opponents=[other_bike for other_bike in self.bikes if other_bike != bike],
         )
 
     def step(self, action: int) -> Tuple[State, int, bool, Dict]:
 
-        # Step player's snake
+        # Step player's bike
         # Temporary fix
         if not self.player_dead:
             self._step(action, self.bikes[0])
@@ -380,8 +380,8 @@ class TronEnv(gym.Env):
         assert len(self.bikes) == len(self.opponent_choose_moves) + 1
         for bike, choose_move in zip(self.bikes[1:], self.opponent_choose_moves):
             if not self.done:
-                snake_state = self.get_bike_state(bike)
-                action = choose_move(state=snake_state)
+                bike_state = self.get_bike_state(bike)
+                action = choose_move(state=bike_state)
                 self._step(action, bike)
 
         idx_alive = []
@@ -396,7 +396,7 @@ class TronEnv(gym.Env):
         # Temporary fix
         if self.player_dead:
             idx_alive.insert(0, 0)
-            # temp fix so don't crash into dead player snake
+            # temp fix so don't crash into dead player bike
             self.bikes[0].set_positions([(-100, -100)])
 
         self.bikes = [self.bikes[idx] for idx in idx_alive]
@@ -423,14 +423,14 @@ class TronEnv(gym.Env):
         assert self.done
         if len(self.bikes) == 0:
             return None
-        return self.bikes[np.argmax([snake.length for snake in self.bikes])]
+        return self.bikes[np.argmax([bike.length for bike in self.bikes])]
 
     def init_visuals(self) -> None:
         pygame.init()
         self.screen = pygame.display.set_mode(
             (ARENA_WIDTH * BLOCK_SIZE, ARENA_HEIGHT * BLOCK_SIZE)  # , pygame.FULLSCREEN
         )
-        pygame.display.set_caption("Snake Game")
+        pygame.display.set_caption("bike Game")
         self.clock = pygame.time.Clock()
         self.screen.fill(WHITE)
         self.score_font = pygame.font.SysFont("comicsansms", 35)
@@ -450,30 +450,30 @@ class TronEnv(gym.Env):
             screen, BLACK, [1, 1, self.SCREEN_WIDTH - 1, self.SCREEN_HEIGHT - 1], width=BLOCK_SIZE
         )
 
-        # Draw snake
-        for snake in self.bikes:
-            # if not snake.alive:
+        # Draw bike
+        for bike in self.bikes:
+            # if not bike.alive:
             #     continue
 
-            color = self.color_lookup[snake.name]
+            color = self.color_lookup[bike.name]
 
-            for snake_pos in snake.body:
-                snake_y = (
-                    ARENA_HEIGHT - snake_pos[1] - 1
+            for bike_pos in bike.body:
+                bike_y = (
+                    ARENA_HEIGHT - bike_pos[1] - 1
                 )  # Flip y axis because pygame counts 0,0 as top left
                 pygame.draw.rect(
                     screen,
                     color,
-                    [snake_pos[0] * BLOCK_SIZE, snake_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
+                    [bike_pos[0] * BLOCK_SIZE, bike_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
                 )
             # Flip y axis because pygame counts 0,0 as top left
-            snake_y = ARENA_HEIGHT - snake.head[1] - 1
+            bike_y = ARENA_HEIGHT - bike.head[1] - 1
             pygame.draw.rect(
                 screen,
                 BLACK,
                 [
-                    snake.head[0] * BLOCK_SIZE,
-                    snake_y * BLOCK_SIZE,
+                    bike.head[0] * BLOCK_SIZE,
+                    bike_y * BLOCK_SIZE,
                     BLOCK_SIZE,
                     BLOCK_SIZE,
                 ],
@@ -529,9 +529,9 @@ def reward_function(successor_state: State, bike_move: Bike) -> int:
     return int(all([not bike.alive for bike in bikes if bike != bike_move]) and bike_move.alive)
 
 
-def has_hit_tails(snake_head: Tuple[int, int], state: State) -> bool:
+def has_hit_tails(bike_head: Tuple[int, int], state: State) -> bool:
     bikes = [state.player] + state.opponents
-    return any([snake_head in bike.body for bike in bikes])
+    return any([bike_head in bike.body for bike in bikes])
 
 
 def head_to_head_collision(bike_move: Bike, state: State) -> State:
