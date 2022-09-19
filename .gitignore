@@ -14,6 +14,10 @@ rankings/
 team_store/
 *.pkl
 !*winner.pkl
+*.prof
+checkpoints/
+
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -123,6 +127,7 @@ celerybeat.pid
 .venv
 env/
 venv/
+snake-env/
 ENV/
 env.bak/
 venv.bak/
