@@ -281,7 +281,12 @@ class TronEnv(gym.Env):
         game_speed_multiplier: float = 1.0,
         single_player_mode: bool = True,
     ):
-        """Number of opponents set by the length of opponent_choose_moves."""
+        """Number of opponents set by the length of opponent_choose_moves.
+
+        If single_player_mode = True, the env will be done if player1 (the
+        player not controlled by opponent_choose_moves) dies. Otherwise
+        env continues until a single bike remains.
+        """
 
         self.choose_move_store = deepcopy(opponent_choose_moves)
 
