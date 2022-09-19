@@ -10,8 +10,6 @@ import numpy as np
 
 import gym
 import pygame
-import torch
-from torch import nn
 
 ARENA_WIDTH = 15
 ARENA_HEIGHT = 15
