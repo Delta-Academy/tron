@@ -516,7 +516,7 @@ def reward_function(successor_state: State, bike_move: Bike) -> int:
 
 def has_hit_tails(bike_head: Tuple[int, int], state: State) -> bool:
     bikes = [state.player] + state.opponents
-    return any([bike_head in bike.body for bike in bikes])
+    return any(bike_head in bike.body for bike in bikes)
 
 
 def head_to_head_collision(bike_move: Bike, state: State) -> State:
