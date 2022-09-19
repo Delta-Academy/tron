@@ -247,7 +247,9 @@ class Bike:
 
 
 def get_starting_positions() -> List[Tuple[int, int]]:
+
     """Get a list of starting positions that are not too close together."""
+
     min_x = ARENA_WIDTH // 4
     max_x = 3 * ARENA_WIDTH // 4
     min_y = ARENA_HEIGHT // 4
@@ -277,6 +279,7 @@ class TronEnv(gym.Env):
         verbose: bool = False,
         render: bool = False,
         game_speed_multiplier: float = 1.0,
+        single_player_mode: bool = True,
     ):
         """Number of opponents set by the length of opponent_choose_moves."""
 
@@ -292,6 +295,8 @@ class TronEnv(gym.Env):
         self.score = 0
         if self._render:
             self.init_visuals()
+
+        self.single_player_mode = single_player_mode
 
     def reset(self) -> Tuple[State, int, bool, Dict]:
 
@@ -315,9 +320,11 @@ class TronEnv(gym.Env):
 
     @property
     def done(self) -> bool:
-        return self.player_dead or len(self.bikes) < 2
-        # Need this for the tournament
-        # return sum(bike.alive for bike in self.bikes) < 2
+        return (
+            self.player_dead or len(self.bikes) < 2
+            if self.single_player_mode
+            else sum(bike.alive for bike in self.bikes) < 2
+        )
 
     def _step(self, action: int, bike: Bike) -> None:
 
