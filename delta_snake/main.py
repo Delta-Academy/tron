@@ -1,7 +1,3 @@
-from typing import Any
-
-import numpy as np
-
 from check_submission import check_submission
 from game_mechanics import (
     State,
