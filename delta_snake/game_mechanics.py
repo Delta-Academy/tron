@@ -509,7 +509,7 @@ def transition_function(state: State, action: int, bike_move: Bike) -> State:
 
 def reward_function(successor_state: State, bike_move: Bike) -> int:
     bikes = [successor_state.player] + successor_state.opponents
-    return int(all([not bike.alive for bike in bikes if bike != bike_move]) and bike_move.alive)
+    return int(all(not bike.alive for bike in bikes if bike != bike_move) and bike_move.alive)
 
 
 def has_hit_tails(bike_head: Tuple[int, int], state: State) -> bool:
