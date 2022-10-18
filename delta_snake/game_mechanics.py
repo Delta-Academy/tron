@@ -6,9 +6,8 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import numpy as np
-
 import gym
+import numpy as np
 import pygame
 
 ARENA_WIDTH = 15
@@ -547,3 +546,7 @@ def head_to_head_collision(bike_move: Bike, state: State) -> State:
 def is_terminal(successor_state: State) -> bool:
     bikes = [successor_state.player] + successor_state.opponents
     return not successor_state.player.alive or sum(bike.alive for bike in bikes) < 2
+
+
+def get_possible_actions():
+    return [1, 2, 3]
