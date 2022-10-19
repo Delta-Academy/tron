@@ -166,11 +166,13 @@ def select_exploit(MCTS):
         verbose=True,
     )
 
-    big_boy = 8
-    for i in range(9):
-        board = [0, 0, 0, 0, 0, 0, 0, 0, 0]
-        board[i] = 1
-        node = Node(State(board, -1), i)
+    big_boy = 4
+    for i in range(6):
+        state = copy.deepcopy(root)
+        player_to_move = state.player if i > 2 else state.opponents[0]
+        action = i % 3
+        state = transition_function(state, action, player_to_move)
+        node = Node(state, 0)
         mcts.tree[node.key] = node
         mcts.N[node.key] = 1 if i != big_boy else 10
         mcts.total_return[node.key] = -2 if i != big_boy else 10
@@ -193,17 +195,20 @@ def select_exploit(MCTS):
 
 def expand_terminal(MCTS):
     # Enter code here
-    root = State([0, 0, 0, 0, 0, 0, 0, 0, 0], 1)
+    root, _, _, _ = TronEnv(opponent_choose_moves=[choose_move_randomly]).reset()
     mcts = MCTS(
         initial_state=root,
-        rollout_policy=lambda x: get_possible_actions(x)[
-            int(random.random() * len(get_possible_actions(x)))
-        ],
+        rollout_policy=lambda x: choose_move_randomly(x),
         explore_coeff=0,
         verbose=True,
     )
-    terminal_state = State([1, 1, 1, -1, -1, 0, 0, 0, 0], -1)
-    terminal_node = Node(terminal_state, 1)
+
+    # Turn the player's bike into itself, terminating game
+    terminal_state = transition_function(root, 2, root.player)
+    terminal_state = transition_function(terminal_state, 2, terminal_state.player)
+    terminal_state = transition_function(terminal_state, 2, terminal_state.player)
+
+    terminal_node = Node(terminal_state, 2)
     mcts.tree[terminal_node.key] = terminal_node
     mcts.N[terminal_node.key] = 0
     mcts.total_return[terminal_node.key] = 0
@@ -223,12 +228,10 @@ def expand_terminal(MCTS):
 
 def expand_root(MCTS):
     # Enter code here
-    root = State([0, 0, 0, 0, 0, 0, 0, 0, 0], 1)
+    root, _, _, _ = TronEnv(opponent_choose_moves=[choose_move_randomly]).reset()
     mcts = MCTS(
         initial_state=root,
-        rollout_policy=lambda x: get_possible_actions(x)[
-            int(random.random() * len(get_possible_actions(x)))
-        ],
+        rollout_policy=lambda x: choose_move_randomly(x),
         explore_coeff=0,
         verbose=True,
     )

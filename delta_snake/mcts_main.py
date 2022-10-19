@@ -20,19 +20,6 @@ TEAM_NAME = "Team mcts"  # <---- Enter your team name here!
 assert TEAM_NAME != "Team Name", "Please change your TEAM_NAME!"
 
 
-def choose_move(state: State) -> int:
-    """Called during competitive play. It acts greedily given current state of the game. It returns
-    a single action to take.
-
-    Args:
-        state: a State object containing the positions of yours and your opponents snakes
-
-    Returns:
-        The action to take
-    """
-    pass
-
-
 class MCTS:
     def __init__(
         self,
@@ -42,9 +29,9 @@ class MCTS:
         verbose: int = 0,
     ):
         self.root_node = Node(initial_state, None)
-        self.total_return: Dict[NodeID:float] = {self.root_node.key: 0.0}
-        self.N: Dict[NodeID:int] = {self.root_node.key: 0}
-        self.tree: Dict[NodeID:State] = {self.root_node.key: self.root_node}
+        self.total_return: Dict[NodeID, float] = {self.root_node.key: 0.0}
+        self.N: Dict[NodeID, int] = {self.root_node.key: 0}
+        self.tree: Dict[NodeID, Node] = {self.root_node.key: self.root_node}
 
         self.rollout_policy = rollout_policy
         self.explore_coeff = explore_coeff
@@ -94,7 +81,7 @@ class MCTS:
 
         child_nodes = []
         for action, state in node.child_states.items():
-            child_node = Node(state)
+            child_node = Node(state, action)
             self.tree[child_node.key] = child_node
             self.total_return[child_node.key] = 0
             self.N[child_node.key] = 0
@@ -150,16 +137,17 @@ class MCTS:
         """Once we've simulated all the trajectories, we want to select the action at the current
         timestep which maximises the action-value estimate."""
         if self.verbose:
-            print(
-                "Q estimates & N:",
-                {
-                    a: (round(self.Q(state.key), 2), self.N[state.key])
-                    for a, state in self.root_node.child_states.items()
-                },
-            )
+            print("HI")
+            # print(
+            #     "Q estimates & N:",
+            #     {
+            #         a: (round(self.Q(state.state_id), 2), self.N[state.state_id])
+            #         for a, state in self.root_node.child_states.items()
+            #     },
+            # )
         return max(
             self.root_node.child_states.keys(),
-            key=lambda a: self.N[(self.root_node.child_states[a].key, a)],
+            key=lambda a: self.N[(self.root_node.child_states[a].state_id, a)],
         )
 
     def Q(self, node_id: NodeID) -> float:
@@ -169,7 +157,9 @@ class MCTS:
         max_uct_value = -math.inf
         max_uct_nodes = []
         for child_node in children_nodes.values():
-            q = -child_node.state.player_to_move * self.Q(child_node.key)
+            # q = -child_node.state.player_to_move * self.Q(child_node.key)
+            # Could be a sign flip here
+            q = self.Q(child_node.key)
             uct_value = q + self.explore_coeff * math.sqrt(
                 math.log(N + 1) / (self.N[child_node.key] + 1e-15)
             )
@@ -180,8 +170,6 @@ class MCTS:
                     round(uct_value, 2),
                     "Q",
                     round(q, 2),
-                    "Sign:",
-                    child_node.state.player_to_move,
                 )
 
             if uct_value > max_uct_value:
@@ -199,31 +187,31 @@ class MCTS:
     def prune_tree(self, action_taken, successor_state: State) -> None:
         """Between steps in the real environment, clear out the old tree."""
         # If it's the terminal state we don't care about pruning the tree
-        if is_terminal(action_taken, successor_state):
+        if is_terminal(successor_state):
             return
 
         self.root_node = self.tree.get(
-            (successor_state.key, action_taken), Node(successor_state, action_taken)
+            (successor_state.state_id, action_taken), Node(successor_state, action_taken)
         )
 
         self.N[self.root_node.key] = 0
         self.total_return[self.root_node.key] = 0
 
         # Build a new tree dictionary
-        new_tree = {self.root_node.key: self.root_node}
+        new_tree: Dict[NodeID, Node] = {self.root_node.key: self.root_node}
 
-        prev_added_nodes = {self.root_node.key: self.root_node}
+        prev_added_nodes: Dict[NodeID, Node] = {self.root_node.key: self.root_node}
         while prev_added_nodes:
-            newly_added_nodes = {}
+            newly_added_nodes: Dict[NodeID, Node] = {}
 
             for node in prev_added_nodes.values():
                 child_nodes = {
-                    (state.key, action): self.tree[(state.key, action)]
+                    (state.state_id, action): self.tree[(state.state_id, action)]
                     for action, state in node.child_states.items()
-                    if (state.key, action) in self.tree
+                    if (state.state_id, action) in self.tree
                 }
-                new_tree |= child_nodes
-                newly_added_nodes |= child_nodes
+                new_tree |= child_nodes  # type: ignore
+                newly_added_nodes |= child_nodes  # type: ignore
 
             prev_added_nodes = newly_added_nodes
 
@@ -232,34 +220,48 @@ class MCTS:
         self.N = {key: self.N[key] for key in self.tree}
 
 
-if __name__ == "__main__":
-    # validate_mcts(MCTS)
-    # validate_mcts(MCTS, True)
-    from validation_tests import *
+def choose_move(state: State) -> int:
+    """Called during competitive play. It acts greedily given current state of the game. It returns
+    a single action to take.
 
-    simulate_from_terminal_state(MCTS)
-    simulation_from_base(MCTS)
-    backup_win_base(MCTS)
-    backup_lose_state_and_parent(MCTS)
-    select_empty(MCTS)
-    select_exploit(MCTS)
-    # expand_terminal(MCTS)
-    # expand_root(MCTS)
+    Args:
+        state: a State object containing the positions of yours and your opponents snakes
+
+    Returns:
+        The action to take
+    """
+    mcts = MCTS(state, rollout_policy=lambda x: choose_move_randomly(x), explore_coeff=0.5)
+    for _ in range(1000):
+        mcts.do_rollout()
+    return mcts.choose_action()
 
 
 # if __name__ == "__main__":
+#     from validation_tests import *
 
-#     # # ## Example workflow, feel free to edit this! ###
+#     simulate_from_terminal_state(MCTS)
+#     simulation_from_base(MCTS)
+#     backup_win_base(MCTS)
+#     backup_lose_state_and_parent(MCTS)
+#     select_empty(MCTS)
+#     select_exploit(MCTS)
+#     expand_terminal(MCTS)
+#     expand_root(MCTS)
 
-#     check_submission(
-#         TEAM_NAME, choose_move
-#     )  # <---- Make sure I pass! Or your solution will not work in the tournament!!
 
-#     # Play against your bot!
-#     play_tron(
-#         your_choose_move=human_player,
-#         opponent_choose_moves=[choose_move],
-#         game_speed_multiplier=5,
-#         render=True,
-#         verbose=True,
-#     )
+if __name__ == "__main__":
+
+    #     # # ## Example workflow, feel free to edit this! ###
+
+    #     check_submission(
+    #         TEAM_NAME, choose_move
+    #     )  # <---- Make sure I pass! Or your solution will not work in the tournament!!
+
+    #     # Play against your bot!
+    play_tron(
+        your_choose_move=choose_move,
+        opponent_choose_moves=[choose_move],
+        game_speed_multiplier=5,
+        render=True,
+        verbose=True,
+    )

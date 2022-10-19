@@ -2,7 +2,7 @@ from typing import Dict, Optional, Tuple
 
 from game_mechanics import Action, State, get_possible_actions, is_terminal, transition_function
 
-NodeID = Tuple[Tuple[Tuple[int], int], int]
+NodeID = Tuple[str, Optional[int]]
 
 
 class Node:
@@ -14,7 +14,7 @@ class Node:
         self.child_states = self._get_possible_children()
         self.key: NodeID = self.state.state_id, last_action
 
-    def _get_possible_children(self) -> Dict[str, State]:
+    def _get_possible_children(self) -> Dict[int, State]:
         """Gets the possible children of this node."""
         if self.is_terminal:
             return {}
@@ -28,5 +28,16 @@ class Node:
                     opponent_moved_state = transition_function(
                         player_moved_state, opponent_action, opponent
                     )
-                    children[opponent_moved_state.state_id] = opponent_moved_state
+                    children[action] = opponent_moved_state
         return children
+
+    # def _get_possible_children(self) -> Dict[Action, State]:
+    #     """Gets the possible children of this node."""
+    #     if self.is_terminal:
+    #         return {}
+    #     children = {}
+    #     for action in get_possible_actions(self.state):
+    #         state = self.state.board.copy()
+    #         state[action] = self.state.player_to_move
+    #         children[action] = State(state, self.state.other_player)
+    #     return children

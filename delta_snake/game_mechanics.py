@@ -12,7 +12,7 @@ import pygame
 
 ARENA_WIDTH = 15
 ARENA_HEIGHT = 15
-BLOCK_SIZE = 50
+BLOCK_SIZE = 20
 
 assert ARENA_HEIGHT == ARENA_WIDTH, "current only support square arenas"
 
