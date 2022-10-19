@@ -1,8 +1,14 @@
 import copy
 import random
 
-from game_mechanics import State, TronEnv, choose_move_randomly, get_possible_actions
-from node import Node
+from game_mechanics import (
+    State,
+    TronEnv,
+    choose_move_randomly,
+    get_possible_actions,
+    transition_function,
+)
+from node import Node, NodeID
 
 
 def simulate_from_terminal_state(MCTS):
@@ -45,16 +51,16 @@ def simulation_from_base(MCTS) -> None:
 
 
 def backup_win_base(MCTS):
+    initial_state, _, _, _ = TronEnv(opponent_choose_moves=[choose_move_randomly]).reset()
     mcts = MCTS(
-        initial_state=State([0, 0, 0, 0, 0, 0, 0, 0, 0], 1),
-        rollout_policy=lambda x: get_possible_actions(x)[
-            int(random.random() * len(get_possible_actions(x)))
-        ],
+        initial_state=initial_state,
+        rollout_policy=lambda x: choose_move_randomly(x),
         explore_coeff=0.5,
         verbose=True,
     )
-    state = State([0, 0, 0, 0, 0, 0, 0, 0, 0], 1)
-    node = Node(state, None)
+
+    state = initial_state
+    node = Node(state)
     total_return = 1
     mcts.tree[node.key] = node
     mcts.N[node.key] = 3
@@ -72,21 +78,21 @@ def backup_win_base(MCTS):
 
 def backup_lose_state_and_parent(MCTS):
     # Enter code here
+    initial_state, _, _, _ = TronEnv(opponent_choose_moves=[choose_move_randomly]).reset()
     mcts = MCTS(
-        initial_state=State([0, 0, 0, 0, 0, 0, 0, 0, 0], 1),
-        rollout_policy=lambda x: get_possible_actions(x)[
-            int(random.random() * len(get_possible_actions(x)))
-        ],
+        initial_state=initial_state,
+        rollout_policy=lambda x: choose_move_randomly(x),
         explore_coeff=0.5,
         verbose=True,
     )
-    root_state = State([0, 0, 0, 0, 0, 0, 0, 0, 0], 1)
-    state_1 = State([0, 1, 0, 0, 0, 0, 0, 0, 0], -1)
-    state_2 = State([-1, 1, 0, 0, 0, 0, 0, 0, 0], 1)
+    root_state = initial_state
+    # Move both bikes forward 1
+    state_1 = transition_function(root_state, 0, root_state.player)
+    state_2 = transition_function(root_state, 0, root_state.opponents[0])
 
-    root_node = Node(root_state, None)
-    node_1 = Node(state_1, 1)
-    node_2 = Node(state_2, 0)
+    root_node = Node(root_state)
+    node_1 = Node(state_1)
+    node_2 = Node(state_2)
 
     mcts.tree[node_2.key] = node_2
     mcts.tree[node_1.key] = node_1
@@ -127,12 +133,10 @@ def backup_lose_state_and_parent(MCTS):
 
 def select_empty(MCTS):
     # Enter code here
-    root = State([0, 0, 0, 0, 0, 0, 0, 0, 0], 1)
+    root, _, _, _ = TronEnv(opponent_choose_moves=[choose_move_randomly]).reset()
     mcts = MCTS(
         initial_state=root,
-        rollout_policy=lambda x: get_possible_actions(x)[
-            int(random.random() * len(get_possible_actions(x)))
-        ],
+        rollout_policy=lambda x: choose_move_randomly(x),
         explore_coeff=0.5,
         verbose=True,
     )
