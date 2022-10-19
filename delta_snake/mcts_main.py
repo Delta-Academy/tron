@@ -1,5 +1,6 @@
 import math
 import random
+import time
 from typing import Callable, Dict, List
 
 from check_submission import check_submission
@@ -7,6 +8,7 @@ from game_mechanics import (
     State,
     TronEnv,
     choose_move_randomly,
+    choose_move_rules,
     choose_move_square,
     human_player,
     is_terminal,
@@ -230,9 +232,17 @@ def choose_move(state: State) -> int:
     Returns:
         The action to take
     """
-    mcts = MCTS(state, rollout_policy=lambda x: choose_move_randomly(x), explore_coeff=0.5)
-    for _ in range(1000):
+    mcts = MCTS(state, rollout_policy=choose_move_rules, explore_coeff=0.5)
+    start_time = time.time()
+    time_taken = 0.0
+    n_rollout = 0
+    while time_taken < 0.5:
         mcts.do_rollout()
+        n_rollout += 1
+
+        time_taken = time.time() - start_time
+
+    print(n_rollout)
     return mcts.choose_action()
 
 
@@ -260,7 +270,7 @@ if __name__ == "__main__":
     #     # Play against your bot!
     play_tron(
         your_choose_move=choose_move,
-        opponent_choose_moves=[choose_move],
+        opponent_choose_moves=[choose_move] * 2,
         game_speed_multiplier=5,
         render=True,
         verbose=True,

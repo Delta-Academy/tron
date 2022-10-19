@@ -12,7 +12,7 @@ import pygame
 
 ARENA_WIDTH = 15
 ARENA_HEIGHT = 15
-BLOCK_SIZE = 20
+BLOCK_SIZE = 50
 
 assert ARENA_HEIGHT == ARENA_WIDTH, "current only support square arenas"
 
@@ -56,6 +56,29 @@ def choose_move_randomly(state: State) -> int:
     return int(random.random() * 3) + 1
 
 
+def choose_move_rules(state: State) -> int:
+    obstacles = (
+        [(ARENA_HEIGHT - 1, i) for i in range(ARENA_WIDTH)]
+        + [(i, ARENA_WIDTH - 1) for i in range(ARENA_HEIGHT)]
+        + [(i, 0) for i in range(ARENA_HEIGHT)]
+        + [(0, i) for i in range(ARENA_WIDTH)]
+    )
+    obstacles += state.player.positions
+    for opponent in state.opponents:
+        obstacles += opponent.positions
+
+    alive_actions = []
+    for action in [1, 2, 3]:
+        new_state = transition_function(state, action, state.player)
+        new_pos = new_state.player.head
+        if new_pos not in obstacles:
+            alive_actions.append(action)
+
+    if len(alive_actions) == 0:
+        return 1
+    return random.choice(alive_actions)
+
+
 def choose_move_square(state: State) -> int:
     """This bot happily goes round the edge in a square."""
 
@@ -85,6 +108,7 @@ def play_tron(
         verbose=verbose,
         render=render,
         game_speed_multiplier=game_speed_multiplier,
+        single_player_mode=False,
     )
 
     state, reward, done, _ = env.reset()
