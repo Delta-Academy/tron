@@ -179,6 +179,9 @@ class Bike:
         result.set_positions(positions)
         return result
 
+    def __repr__(self) -> str:
+        return f"Bike {self.name}"
+
     def set_positions(self, positions: List[Tuple[int, int]]) -> None:
         self.positions = positions
 

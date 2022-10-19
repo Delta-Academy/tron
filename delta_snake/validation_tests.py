@@ -27,16 +27,15 @@ def simulate_from_terminal_state(MCTS):
     }, f"total_return returned from ._simulate() = {total_return}, must be in [-1, 0, 1]"
 
 
-def simulation_from_base(MCTS):
+def simulation_from_base(MCTS) -> None:
+    initial_state, _, _, _ = TronEnv(opponent_choose_moves=[choose_move_randomly]).reset()
     mcts = MCTS(
-        initial_state=State([0, 0, 0, 0, 0, 0, 0, 0, 0], 1),
-        rollout_policy=lambda x: get_possible_actions(x)[
-            int(random.random() * len(get_possible_actions(x)))
-        ],
+        initial_state=initial_state,
+        rollout_policy=lambda x: choose_move_randomly(x),
         explore_coeff=0.5,
         verbose=True,
     )
-    node = Node(State([0, 0, 0, 0, 0, 0, 0, 0, 0], 1), None)
+    node = Node(initial_state)
     total_return = mcts._simulate(node)
     assert total_return in {
         -1,
