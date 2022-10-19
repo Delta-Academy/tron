@@ -41,7 +41,7 @@ class MCTS:
         explore_coeff: float,
         verbose: int = 0,
     ):
-        self.root_node = Node(initial_state)
+        self.root_node = Node(initial_state, None)
         self.total_return: Dict[NodeID:float] = {self.root_node.key: 0.0}
         self.N: Dict[NodeID:int] = {self.root_node.key: 0}
         self.tree: Dict[NodeID:State] = {self.root_node.key: self.root_node}
@@ -71,9 +71,11 @@ class MCTS:
         path_taken = [node]
         # If not fully expanded children, select this node
         while not node.is_terminal and all(
-            (state.key, action) in self.tree for action, state in node.child_states.items()
+            (state.state_id, action) in self.tree for action, state in node.child_states.items()
         ):
-            child_nodes = {a: self.tree[(state.key, a)] for a, state in node.child_states.items()}
+            child_nodes = {
+                a: self.tree[(state.state_id, a)] for a, state in node.child_states.items()
+            }
             node = self._uct_select(self.N[node.key], child_nodes)
             path_taken.append(node)
             if self.verbose:
@@ -240,7 +242,7 @@ if __name__ == "__main__":
     backup_win_base(MCTS)
     backup_lose_state_and_parent(MCTS)
     select_empty(MCTS)
-    # select_exploit(MCTS)
+    select_exploit(MCTS)
     # expand_terminal(MCTS)
     # expand_root(MCTS)
 

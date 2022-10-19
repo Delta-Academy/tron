@@ -23,7 +23,7 @@ def simulate_from_terminal_state(MCTS):
     )
     terminal_state = copy.deepcopy(initial_state)
     terminal_state.player.alive = False
-    node = Node(terminal_state)
+    node = Node(terminal_state, 0)
 
     total_return = mcts._simulate(node)
     assert total_return in {
@@ -41,7 +41,7 @@ def simulation_from_base(MCTS) -> None:
         explore_coeff=0.5,
         verbose=True,
     )
-    node = Node(initial_state)
+    node = Node(initial_state, None)
     total_return = mcts._simulate(node)
     assert total_return in {
         -1,
@@ -60,7 +60,7 @@ def backup_win_base(MCTS):
     )
 
     state = initial_state
-    node = Node(state)
+    node = Node(state, None)
     total_return = 1
     mcts.tree[node.key] = node
     mcts.N[node.key] = 3
@@ -90,9 +90,9 @@ def backup_lose_state_and_parent(MCTS):
     state_1 = transition_function(root_state, 0, root_state.player)
     state_2 = transition_function(root_state, 0, root_state.opponents[0])
 
-    root_node = Node(root_state)
-    node_1 = Node(state_1)
-    node_2 = Node(state_2)
+    root_node = Node(root_state, None)
+    node_1 = Node(state_1, 0)
+    node_2 = Node(state_2, 0)
 
     mcts.tree[node_2.key] = node_2
     mcts.tree[node_1.key] = node_1
@@ -158,15 +158,14 @@ def select_empty(MCTS):
 
 def select_exploit(MCTS):
     # Enter code here
-    root = State([0, 0, 0, 0, 0, 0, 0, 0, 0], 1)
+    root, _, _, _ = TronEnv(opponent_choose_moves=[choose_move_randomly]).reset()
     mcts = MCTS(
         initial_state=root,
-        rollout_policy=lambda x: get_possible_actions(x)[
-            int(random.random() * len(get_possible_actions(x)))
-        ],
-        explore_coeff=0,
+        rollout_policy=lambda x: choose_move_randomly(x),
+        explore_coeff=0.5,
         verbose=True,
     )
+
     big_boy = 8
     for i in range(9):
         board = [0, 0, 0, 0, 0, 0, 0, 0, 0]

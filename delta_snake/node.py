@@ -6,12 +6,13 @@ NodeID = Tuple[Tuple[Tuple[int], int], int]
 
 
 class Node:
-    def __init__(self, state: State):
+    def __init__(self, state: State, last_action: Optional[int]):
         self.state = state
-        self.is_terminal = is_terminal(state)
+        self.last_action = last_action
+        self.is_terminal = is_terminal(state) if last_action is not None else False
         # No guarantee that these NODES exist in the MCTS TREE!
         self.child_states = self._get_possible_children()
-        self.key = self.state.state_id
+        self.key: NodeID = self.state.state_id, last_action
 
     def _get_possible_children(self) -> Dict[str, State]:
         """Gets the possible children of this node."""
