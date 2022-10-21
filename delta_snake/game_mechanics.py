@@ -1,8 +1,9 @@
+import math
 import random
 import time
-from copy import copy, deepcopy
+import timeit
+from copy import copy
 from dataclasses import dataclass
-from itertools import chain
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -15,7 +16,6 @@ ARENA_HEIGHT = 15
 BLOCK_SIZE = 50
 
 assert ARENA_HEIGHT == ARENA_WIDTH, "current only support square arenas"
-
 
 TAIL_STARTING_LENGTH = 1
 
@@ -38,17 +38,23 @@ HERE = Path(__file__).parent.resolve()
 @dataclass
 class State:
     player: "Bike"
-    opponents: List["Bike"]
+    opponent: "Bike"
+    player_move: Optional[int] = None
 
     @property
-    def state_id(self) -> str:
-        """Unique identifier of state."""
-        # Ensure opponents always in the same order by position
-        self.opponents.sort(key=lambda x: sum(chain(*x.positions)))
-        s = f"player:{self.player.bike_state}"
-        for opponent in self.opponents:
-            s += f"opponent{opponent.bike_state}"
-        return s
+    def bikes(self):
+        return self.player, self.opponent
+
+    @property
+    def state_id(self) -> Tuple[Tuple, Tuple, Optional[int]]:
+        return self.player.bike_state, self.opponent.bike_state, self.player_move
+
+    @property
+    def bike_to_move(self):
+        return self.player if self.player_move is None else self.opponent
+
+    def copy(self):
+        return State(copy(self.player), copy(self.opponent), self.player_move)
 
 
 def choose_move_randomly(state: State) -> int:
@@ -56,33 +62,30 @@ def choose_move_randomly(state: State) -> int:
     return int(random.random() * 3) + 1
 
 
-def rules_rollout(state: State, bike_move: Optional["Bike"] = None) -> int:
-    if bike_move is None:
-        bike_move = state.player
-
+def rules_rollout(state: State) -> int:
+    """Rollout policy that tries not to hit anything."""
     obstacles = (
-        [(ARENA_HEIGHT - 1, i) for i in range(ARENA_WIDTH)]
-        + [(i, ARENA_WIDTH - 1) for i in range(ARENA_HEIGHT)]
-        + [(i, 0) for i in range(ARENA_HEIGHT)]
-        + [(0, i) for i in range(ARENA_WIDTH)]
+        (
+            [(ARENA_HEIGHT - 1, i) for i in range(ARENA_WIDTH)]
+            + [(i, ARENA_WIDTH - 1) for i in range(ARENA_HEIGHT)]
+            + [(i, 0) for i in range(ARENA_HEIGHT)]
+            + [(0, i) for i in range(ARENA_WIDTH)]
+        )
+        + state.player.positions
+        + state.opponent.positions
     )
 
-    obstacles += state.player.positions
-    for opponent in state.opponents:
-        obstacles += opponent.positions
-
-    alive_actions = []
-
-    for action in [1, 2, 3]:
-        bike_moving = deepcopy(bike_move)
+    poss_actions = get_possible_actions()
+    while len(poss_actions) > 0:
+        action = poss_actions[math.floor(random.random() * len(poss_actions))]
+        bike_moving = copy(state.bike_to_move)
         bike_moving.take_action(action)
         if bike_moving.head not in obstacles:
-            alive_actions.append(action)
-
-    if len(alive_actions) == 0:
-        return 1
-
-    return random.choice(alive_actions)
+            return action
+        else:
+            # print("Remove", action)
+            poss_actions.remove(action)
+    return 1
 
 
 def choose_move_square(state: State) -> int:
@@ -124,7 +127,6 @@ def play_tron(
     while not done:
         action = your_choose_move(state)
         state, reward, done, _ = env.step(action)
-        print(reward_function(state, state.player))
         return_ += reward
 
     return return_
@@ -161,9 +163,9 @@ class Orientation:
 
 class Bike:
     def __init__(
-        self, name: str = "snek", starting_position: Optional[Tuple[int, int]] = None
+        self, name: str = "bike", starting_position: Optional[Tuple[int, int]] = None
     ) -> None:
-
+        # Initial orientation of the bike is chosen at random
         self.direction = random.choice(
             [Orientation.EAST, Orientation.WEST, Orientation.NORTH, Orientation.SOUTH]
         )
@@ -195,7 +197,6 @@ class Bike:
 
         self.alive = True
         self.name = name
-        self.is_murderer = False
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Bike):
@@ -203,12 +204,24 @@ class Bike:
         return self.name == other.name
 
     def __copy__(self) -> "Bike":
-        positions = deepcopy(self.positions)
+        positions = copy(self.positions)
         cls = self.__class__
-        result = cls.__new__(cls)
-        result.__dict__.update(self.__dict__)
-        result.set_positions(positions)
-        return result
+        new_copy = cls.__new__(cls)
+        new_copy.alive = self.alive
+        new_copy.name = self.name
+        new_copy.direction = self.direction
+        new_copy.positions = positions
+        return new_copy
+
+    def copy2(self) -> "Bike":
+        positions = list(self.positions)
+        cls = self.__class__
+        new_copy = cls.__new__(cls)
+        new_copy.alive = self.alive
+        new_copy.name = self.name
+        new_copy.direction = self.direction
+        new_copy.positions = positions
+        return new_copy
 
     def __repr__(self) -> str:
         return f"Bike {self.name}"
@@ -219,11 +232,11 @@ class Bike:
     def has_hit_boundaries(self) -> bool:
         return not in_arena(self.head)
 
-    def kill_bike(self) -> None:
-        self.alive = False
-
     def has_hit_self(self) -> bool:
         return self.head in self.body
+
+    def kill_bike(self) -> None:
+        self.alive = False
 
     @property
     def length(self) -> int:
@@ -234,12 +247,12 @@ class Bike:
         return self.positions[0]
 
     @property
-    def bike_state(self) -> str:
+    def bike_state(self) -> Tuple:
         """Describes fully the state of a bike.
 
         Can be used as a dictionary key
         """
-        return f"position{self.positions}alive{self.alive}direction{self.direction}"
+        return tuple(self.positions) if self.alive else ("dead",)
 
     @property
     def body(self) -> List[Tuple[int, int]]:
@@ -268,16 +281,10 @@ class Bike:
             self.positions.insert(0, (x, y))
             self.direction = new_orientation
 
-        self.positions = list(self.positions)
+        # self.positions = list(self.positions)
 
     def remove_tail_end(self) -> None:
         del self.positions[-1]
-
-    def make_a_murderer(self) -> None:
-        self.is_murderer = True
-
-    def make_innocent(self) -> None:
-        self.is_murderer = False
 
 
 def get_starting_positions() -> List[Tuple[int, int]]:
@@ -323,12 +330,7 @@ class TronEnv(gym.Env):
         """
 
         # Restrict to single opponent
-        opponent_choose_moves = [opponent_choose_move]
-
-        self.choose_move_store = deepcopy(opponent_choose_moves)
-
-        self.opponent_choose_moves = opponent_choose_moves
-        self.n_foods = self.n_opponents = len(self.opponent_choose_moves)
+        self.opponent_choose_move = opponent_choose_move
         self._render = render
         self.verbose = verbose
         self.game_speed_multiplier = game_speed_multiplier
@@ -341,24 +343,23 @@ class TronEnv(gym.Env):
         self.single_player_mode = single_player_mode
 
     def reset(self) -> Tuple[State, int, bool, Dict]:
-
-        self.opponent_choose_moves = self.choose_move_store
         self.player_dead = False
         self.num_steps_taken = 0
 
         random.shuffle(self.starting_positions)
 
         self.player_bike = Bike(name="player", starting_position=self.starting_positions[0])
-        self.bikes = [self.player_bike]
-        self.bikes += [
-            Bike(name=f"opponent_{idx}", starting_position=self.starting_positions[idx + 1])
-            for idx in range(len(self.opponent_choose_moves))
-        ]
+        self.opponent_bike = Bike(name="opponent", starting_position=self.starting_positions[1])
+
         self.dead_bikes: List[Bike] = []
-        assert len(self.bikes) == len(self.opponent_choose_moves) + 1
+        assert len(self.bikes) == 2
 
         self.color_lookup = dict(zip([bike.name for bike in self.bikes], BIKE_COLORS))
         return self.get_bike_state(self.bikes[0]), 0, False, {}
+
+    @property
+    def bikes(self) -> List[Bike]:
+        return [self.player_bike, self.opponent_bike]
 
     @property
     def done(self) -> bool:
@@ -395,13 +396,7 @@ class TronEnv(gym.Env):
         return False
 
     def has_hit_tails(self, bike_head: Tuple[int, int]) -> bool:
-        for other_bike in self.bikes:
-            if bike_head in other_bike.body:
-                # Did other_bike kill with body, not suicide?
-                if bike_head != other_bike.head:
-                    other_bike.make_a_murderer()
-                return True
-        return False
+        return any(bike_head in other_bike.body for other_bike in self.bikes)
 
     @staticmethod
     def boundary_elements_mask(matrix: np.ndarray) -> np.ndarray:
@@ -412,7 +407,7 @@ class TronEnv(gym.Env):
     def get_bike_state(self, bike: Bike) -> State:
         return State(
             player=bike,
-            opponents=[other_bike for other_bike in self.bikes if other_bike != bike],
+            opponent=[other_bike for other_bike in self.bikes if other_bike != bike][0],
         )
 
     def step(self, action: int) -> Tuple[State, int, bool, Dict]:
@@ -421,12 +416,11 @@ class TronEnv(gym.Env):
         if not self.player_dead:
             self._step(action, self.bikes[0])
 
-        assert len(self.bikes) == len(self.opponent_choose_moves) + 1
-        for bike, choose_move in zip(self.bikes[1:], self.opponent_choose_moves):
-            if not self.done:
-                bike_state = self.get_bike_state(bike)
-                action = choose_move(state=bike_state)
-                self._step(action, bike)
+        assert len(self.bikes) == 2
+        if not self.done:
+            bike_state = self.get_bike_state(self.opponent_bike)
+            action = self.opponent_choose_move(state=bike_state)
+            self._step(action, self.opponent_bike)
 
         idx_alive = []
         for idx, bike in enumerate(self.bikes):
@@ -441,12 +435,6 @@ class TronEnv(gym.Env):
             idx_alive.insert(0, 0)
             # Make sure you don't crash into dead bikes
             self.bikes[0].set_positions([(-100, -100)])
-
-        self.bikes = [self.bikes[idx] for idx in idx_alive]
-
-        self.opponent_choose_moves = [
-            self.opponent_choose_moves[idx - 1] for idx in idx_alive if idx != 0
-        ]
 
         if self._render:
             self.render_game()
@@ -472,29 +460,21 @@ class TronEnv(gym.Env):
         self.screen = pygame.display.set_mode(
             (ARENA_WIDTH * BLOCK_SIZE, ARENA_HEIGHT * BLOCK_SIZE)  # , pygame.FULLSCREEN
         )
-        pygame.display.set_caption("bike Game")
+        pygame.display.set_caption("Tron")
         self.clock = pygame.time.Clock()
         self.screen.fill(WHITE)
         self.score_font = pygame.font.SysFont("comicsansms", 35)
 
     def render_game(self, screen: Optional[pygame.Surface] = None) -> None:
-
-        # If no injected screen, use graphical constants
         if screen is None:
             screen = self.screen
-            screen_width = self.SCREEN_WIDTH
-            screen_height = self.SCREEN_HEIGHT
-            block_size = BLOCK_SIZE
-        else:  # Overwrite  visual consts based on screen
-            screen_width = screen.get_width()
-            screen_height = screen.get_height()
-            block_size = screen_width // ARENA_WIDTH  # Assume square
 
+        self.clock.tick()
         screen.fill(WHITE)
 
         # Draw boundaries
         pygame.draw.rect(
-            screen, BLACK, [1, 1, screen_width - 1, screen_height - 1], width=block_size
+            screen, BLACK, [1, 1, self.SCREEN_WIDTH - 1, self.SCREEN_HEIGHT - 1], width=BLOCK_SIZE
         )
 
         for bike in self.bikes:
@@ -508,7 +488,7 @@ class TronEnv(gym.Env):
                 pygame.draw.rect(
                     screen,
                     color,
-                    [bike_pos[0] * block_size, bike_y * block_size, block_size, block_size],
+                    [bike_pos[0] * BLOCK_SIZE, bike_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
                 )
             # Flip y axis because pygame counts 0,0 as top left
             bike_y = ARENA_HEIGHT - bike.head[1] - 1
@@ -516,10 +496,10 @@ class TronEnv(gym.Env):
                 screen,
                 BLACK,
                 [
-                    bike.head[0] * block_size,
-                    bike_y * block_size,
-                    block_size,
-                    block_size,
+                    bike.head[0] * BLOCK_SIZE,
+                    bike_y * BLOCK_SIZE,
+                    BLOCK_SIZE,
+                    BLOCK_SIZE,
                 ],
             )
 
@@ -538,71 +518,202 @@ def human_player(*args: Any, **kwargs: Any) -> int:
 
 
 # Functional reimplementation of some above logic
-def transition_function(
-    state: State, action: int, bike_move: Bike, make_copies: bool = True
-) -> State:
+def transition_function(state: State, action: int, make_copies: bool = True) -> State:
 
     if make_copies:
         state = copy(state)
-        bike_move = copy(bike_move)
         state.player = copy(state.player)
-        state.opponents = [copy(bike) for bike in state.opponents]
+        state.opponent = copy(state.opponent)
 
-    bike_move.take_action(action)
+    if state.player_move is None:
+        state.player_move = action
+        return state
 
-    if has_hit_tails(bike_move.head, state) or bike_move.has_hit_boundaries():
-        bike_move.kill_bike()
+    state.opponent.take_action(action)
+    state.player.take_action(state.player_move)
+    state.player_move = None
 
-    state = head_to_head_collision(bike_move, state)
+    for bike in state.bikes:
+        if has_hit_tails(bike.head, state) or bike.has_hit_boundaries():
+            bike.kill_bike()
 
-    # Put the newly moved bike back in the state copy
-    if make_copies:
-        if state.player == bike_move:
-            state.player = bike_move
-        else:
-            for idx, bike in enumerate(state.opponents):
-                if bike == bike_move:
-                    state.opponents[idx] = bike_move
+    head_to_head_collision(state)
 
     return state
 
 
-def reward_function(successor_state: State, bike_move: Bike) -> int:
+def reward_function(successor_state: State) -> int:
     player_dead = not successor_state.player.alive
-    opponent_dead = not any(bike.alive for bike in successor_state.opponents)
+    opponent_dead = not successor_state.opponent.alive
     if player_dead and not opponent_dead:
         return -1
     elif not player_dead and opponent_dead:
         return 1
     return 0
 
-    # return int(all(not bike.alive for bike in bikes if bike != bike_move) and bike_move.alive)
-
 
 def has_hit_tails(bike_head: Tuple[int, int], state: State) -> bool:
-    bikes = [state.player] + state.opponents
-    return any(bike_head in bike.body for bike in bikes)
+    return any(bike_head in bike.body for bike in state.bikes)
 
 
-def head_to_head_collision(bike_move: Bike, state: State) -> State:
+def head_to_head_collision(state: State) -> None:
     """Kill bikes involved in head to head collisions."""
-
-    bikes = [state.player] + state.opponents
-
-    for other_bike in bikes:
-        if other_bike == bike_move:
-            continue
-        if other_bike.head == bike_move.head:
-            other_bike.kill_bike()
-            bike_move.kill_bike()
-
-    return state
+    if state.opponent.head == state.player.head:
+        state.opponent.kill_bike()
+        state.player.kill_bike()
 
 
 def is_terminal(successor_state: State) -> bool:
-    bikes = [successor_state.player] + successor_state.opponents
-    return not successor_state.player.alive or sum(bike.alive for bike in bikes) < 2
+    return any(not bike.alive for bike in successor_state.bikes)
 
 
 def get_possible_actions():
     return [1, 2, 3]
+
+
+bike = Bike("player")
+bike.positions = [
+    (0, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (5, 0),
+    (6, 0),
+    (7, 0),
+    (8, 0),
+    (9, 0),
+    (10, 0),
+]
+print(timeit.timeit("copy(bike)", globals=globals(), number=10000))
+print(timeit.timeit("bike.copy2()", globals=globals(), number=10000))

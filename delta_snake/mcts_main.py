@@ -2,28 +2,28 @@ import cProfile
 import math
 import random
 import time
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Tuple
 
-import numpy as np
 from tqdm import tqdm
 
-from check_submission import check_submission
 from game_mechanics import (
+    Bike,
     State,
-    TronEnv,
-    choose_move_randomly,
-    choose_move_square,
-    human_player,
+    get_possible_actions,
+    in_arena,
     is_terminal,
     play_tron,
     reward_function,
-    rules_rollout,
     transition_function,
 )
 from node import Node, NodeID
 
-TEAM_NAME = "Team mcts"  # <---- Enter your team name here!
+TEAM_NAME = "Henry"  # <---- Enter your team name here!
 assert TEAM_NAME != "Team Name", "Please change your TEAM_NAME!"
+
+
+def player_sign(state: State):
+    return 2 * (int(state.bike_to_move == state.player) - 0.5)
 
 
 class MCTS:
@@ -34,7 +34,7 @@ class MCTS:
         explore_coeff: float,
         verbose: int = 0,
     ):
-        self.root_node = Node(initial_state, None)
+        self.root_node = Node(initial_state)
         self.total_return: Dict[NodeID, float] = {self.root_node.key: 0.0}
         self.N: Dict[NodeID, int] = {self.root_node.key: 0}
         self.tree: Dict[NodeID, Node] = {self.root_node.key: self.root_node}
@@ -43,11 +43,12 @@ class MCTS:
         self.explore_coeff = explore_coeff
 
         self.verbose = verbose
-        self.rollout_len = []
+        self.rollout_len: List[int] = []
+        self.select_len: List[int] = []
 
     def do_rollout(self) -> None:
         if self.verbose:
-            print("\nNew rollout started from", self.root_node.state)
+            print("\nNew rollout started from", self.root_node.state.state_id)
         path_taken = self._select()
         simulation_node = self._expand(path_taken[-1])
         total_return = self._simulate(simulation_node)
@@ -65,15 +66,14 @@ class MCTS:
         path_taken = [node]
         # If not fully expanded children, select this node
         while not node.is_terminal and all(
-            (state.state_id, action) in self.tree for action, state in node.child_states.items()
+            state.state_id in self.tree for state in node.child_states.values()
         ):
-            child_nodes = {
-                a: self.tree[(state.state_id, a)] for a, state in node.child_states.items()
-            }
+            child_nodes = {a: self.tree[state.state_id] for a, state in node.child_states.items()}
             node = self._uct_select(self.N[node.key], child_nodes)
             path_taken.append(node)
             if self.verbose:
-                print("UCT selected:", node.state)
+                print("UCT selected:", node.state.state_id)
+        self.select_len.append(len(path_taken))
         return path_taken
 
     def _expand(self, node: Node) -> Node:
@@ -88,7 +88,7 @@ class MCTS:
 
         child_nodes = []
         for action, state in node.child_states.items():
-            child_node = Node(state, action)
+            child_node = Node(state)
             self.tree[child_node.key] = child_node
             self.total_return[child_node.key] = 0
             self.N[child_node.key] = 0
@@ -100,26 +100,17 @@ class MCTS:
         """Simulates a full episode to completion from `node`, outputting the total return from the
         episode."""
         n_steps = 0
-        if not node.is_terminal:
-            action = self.rollout_policy(node.state, node.state.player)
-            # Arbitrarily step player first
-            state = node.state
-            state = transition_function(node.state, action, node.state.player)
-
-            while not is_terminal(state):
-                n_steps += 1
-                bikes = [state.player] + state.opponents
-                for bike in bikes:
-                    action = self.rollout_policy(state, bike)
-                    if self.verbose:
-                        print(f"Simulation take move: {action} on {bike}")
-                    state = transition_function(state, action, bike, make_copies=False)
-        else:
-            state = node.state
+        state = node.state.copy()
+        while not is_terminal(state):
+            n_steps += 1
+            for bike in state.bikes:
+                action = self.rollout_policy(state)
+                if self.verbose:
+                    print(f"Simulation take move: {action} on {bike} with state: {state.state_id}")
+                state = transition_function(state, action, make_copies=False)
 
         self.rollout_len.append(n_steps)
-        # Not convinced the second argument is correct
-        total_return = reward_function(state, state.player)
+        total_return = reward_function(state)
 
         if self.verbose:
             print("Simulation return:", total_return, state)
@@ -147,17 +138,16 @@ class MCTS:
         """Once we've simulated all the trajectories, we want to select the action at the current
         timestep which maximises the action-value estimate."""
         if self.verbose:
-            print("HI")
-            # print(
-            #     "Q estimates & N:",
-            #     {
-            #         a: (round(self.Q(state.state_id), 2), self.N[state.state_id])
-            #         for a, state in self.root_node.child_states.items()
-            #     },
-            # )
+            print(
+                "Q estimates & N:",
+                {
+                    a: (round(self.Q(state.state_id), 2), self.N[state.state_id])
+                    for a, state in self.root_node.child_states.items()
+                },
+            )
         return max(
             self.root_node.child_states.keys(),
-            key=lambda a: self.N[(self.root_node.child_states[a].state_id, a)],
+            key=lambda a: self.N[self.root_node.child_states[a].state_id],
         )
 
     def Q(self, node_id: NodeID) -> float:
@@ -167,9 +157,7 @@ class MCTS:
         max_uct_value = -math.inf
         max_uct_nodes = []
         for child_node in children_nodes.values():
-            # q = -child_node.state.player_to_move * self.Q(child_node.key)
-            # Could be a sign flip here
-            q = self.Q(child_node.key)
+            q = -player_sign(child_node.state) * self.Q(child_node.key)
             uct_value = q + self.explore_coeff * math.sqrt(
                 math.log(N + 1) / (self.N[child_node.key] + 1e-15)
             )
@@ -194,40 +182,40 @@ class MCTS:
             print("Exploring!")
         return chosen_node
 
-    def prune_tree(self, action_taken, successor_state: State) -> None:
-        """Between steps in the real environment, clear out the old tree."""
-        # If it's the terminal state we don't care about pruning the tree
-        if is_terminal(successor_state):
-            return
-
-        self.root_node = self.tree.get(
-            (successor_state.state_id, action_taken), Node(successor_state, action_taken)
-        )
-
-        self.N[self.root_node.key] = 0
-        self.total_return[self.root_node.key] = 0
-
-        # Build a new tree dictionary
-        new_tree: Dict[NodeID, Node] = {self.root_node.key: self.root_node}
-
-        prev_added_nodes: Dict[NodeID, Node] = {self.root_node.key: self.root_node}
-        while prev_added_nodes:
-            newly_added_nodes: Dict[NodeID, Node] = {}
-
-            for node in prev_added_nodes.values():
-                child_nodes = {
-                    (state.state_id, action): self.tree[(state.state_id, action)]
-                    for action, state in node.child_states.items()
-                    if (state.state_id, action) in self.tree
-                }
-                new_tree |= child_nodes  # type: ignore
-                newly_added_nodes |= child_nodes  # type: ignore
-
-            prev_added_nodes = newly_added_nodes
-
-        self.tree = new_tree
-        self.total_return = {key: self.total_return[key] for key in self.tree}
-        self.N = {key: self.N[key] for key in self.tree}
+    # def prune_tree(self, action_taken, successor_state: State) -> None:
+    #     """Between steps in the real environment, clear out the old tree."""
+    #     # If it's the terminal state we don't care about pruning the tree
+    #     if is_terminal(successor_state):
+    #         return
+    #
+    #     self.root_node = self.tree.get(
+    #         (successor_state.state_id, action_taken), Node(successor_state, action_taken)
+    #     )
+    #
+    #     self.N[self.root_node.key] = 0
+    #     self.total_return[self.root_node.key] = 0
+    #
+    #     # Build a new tree dictionary
+    #     new_tree: Dict[NodeID, Node] = {self.root_node.key: self.root_node}
+    #
+    #     prev_added_nodes: Dict[NodeID, Node] = {self.root_node.key: self.root_node}
+    #     while prev_added_nodes:
+    #         newly_added_nodes: Dict[NodeID, Node] = {}
+    #
+    #         for node in prev_added_nodes.values():
+    #             child_nodes = {
+    #                 (state.state_id, action): self.tree[(state.state_id, action)]
+    #                 for action, state in node.child_states.items()
+    #                 if (state.state_id, action) in self.tree
+    #             }
+    #             new_tree |= child_nodes  # type: ignore
+    #             newly_added_nodes |= child_nodes  # type: ignore
+    #
+    #         prev_added_nodes = newly_added_nodes
+    #
+    #     self.tree = new_tree
+    #     self.total_return = {key: self.total_return[key] for key in self.tree}
+    #     self.N = {key: self.N[key] for key in self.tree}
 
 
 def choose_move(state: State) -> int:
@@ -240,43 +228,67 @@ def choose_move(state: State) -> int:
     Returns:
         The action to take
     """
-    mcts = MCTS(state, rollout_policy=rules_rollout, explore_coeff=0.5)
+    mcts = MCTS(state, rollout_policy=henry_rules_rollout, explore_coeff=0.5, verbose=0)
     start_time = time.time()
-    time_taken = 0.0
+
     n_rollout = 0
-    while time_taken < 0.1:
+    while time.time() - start_time < 10 and n_rollout < 10_000:
         mcts.do_rollout()
         n_rollout += 1
-        time_taken = time.time() - start_time
 
-    # print(f"n_rollouts = {n_rollout}")
-    # print(f"rollout_len = {(mcts.rollout_len)}")
-    # print("\n")
+    print(
+        f"n_rollouts = {n_rollout}, "
+        f"rollout_lengths = {sum(mcts.rollout_len) / len(mcts.rollout_len)},"
+        f" select_lengths = {sum(mcts.select_len) / len(mcts.select_len)}\n"
+    )
 
     return mcts.choose_action()
 
 
-# if __name__ == "__main__":
-#     from validation_tests import *
+def get_new_head_location(bike: Bike, action: int) -> Tuple[int, int]:
+    if action == 2:
+        new_orientation = (bike.direction + 1) % 4
+    elif action == 3:
+        new_orientation = (bike.direction - 1) % 4
+    else:
+        new_orientation = bike.direction
 
-#     simulate_from_terminal_state(MCTS)
-#     simulation_from_base(MCTS)
-#     backup_win_base(MCTS)
-#     backup_lose_state_and_parent(MCTS)
-#     select_empty(MCTS)
-#     select_exploit(MCTS)
-#     expand_terminal(MCTS)
-#     expand_root(MCTS)
+    x, y = bike.head
+    if new_orientation % 2 == 0:
+        # South is 0 (y -= 1), North is 2 (y += 1)
+        y += new_orientation - 1
+    else:
+        # East is 1 (x += 1), West is 3 (x -= 1)
+        x += 2 - new_orientation
+    return x, y
+
+
+def not_in_operator(a, b):
+    return a in b
+
+
+def henry_rules_rollout(state: State) -> int:
+    """Rollout policy that tries not to hit anything."""
+    obstacles = state.player.positions + state.opponent.positions
+
+    poss_actions = get_possible_actions()
+    while poss_actions:
+        action = poss_actions[math.floor(random.random() * len(poss_actions))]
+        new_head = get_new_head_location(state.bike_to_move, action)
+        if in_arena(new_head) and new_head not in obstacles:
+            return action
+        else:
+            poss_actions.remove(action)
+    return 1
 
 
 def profile_me():
-
-    for _ in tqdm(range(100)):
+    for _ in tqdm(range(1)):
         play_tron(
             your_choose_move=choose_move,
-            opponent_choose_move=choose_move,
+            opponent_choose_move=henry_rules_rollout,
             game_speed_multiplier=5,
-            render=False,
+            render=True,
             verbose=False,
         )
 
@@ -292,11 +304,4 @@ if __name__ == "__main__":
     #     # Play against your bot!
 
     cProfile.run("profile_me()", "profile.prof")
-
-    # play_tron(
-    #     your_choose_move=human_player,
-    #     opponent_choose_move=choose_move_square,
-    #     game_speed_multiplier=5,
-    #     render=True,
-    #     verbose=False,
-    # )
+    # profile_me()
