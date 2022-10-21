@@ -1,19 +1,23 @@
+import cProfile
 import math
 import random
 import time
 from typing import Callable, Dict, List
+
+import numpy as np
+from tqdm import tqdm
 
 from check_submission import check_submission
 from game_mechanics import (
     State,
     TronEnv,
     choose_move_randomly,
-    choose_move_rules,
     choose_move_square,
     human_player,
     is_terminal,
     play_tron,
     reward_function,
+    rules_rollout,
     transition_function,
 )
 from node import Node, NodeID
@@ -39,6 +43,7 @@ class MCTS:
         self.explore_coeff = explore_coeff
 
         self.verbose = verbose
+        self.rollout_len = []
 
     def do_rollout(self) -> None:
         if self.verbose:
@@ -94,22 +99,25 @@ class MCTS:
     def _simulate(self, node: Node) -> float:
         """Simulates a full episode to completion from `node`, outputting the total return from the
         episode."""
+        n_steps = 0
         if not node.is_terminal:
-            action = self.rollout_policy(node.state)
+            action = self.rollout_policy(node.state, node.state.player)
             # Arbitrarily step player first
             state = node.state
             state = transition_function(node.state, action, node.state.player)
 
             while not is_terminal(state):
+                n_steps += 1
                 bikes = [state.player] + state.opponents
                 for bike in bikes:
-                    action = self.rollout_policy(state)
+                    action = self.rollout_policy(state, bike)
                     if self.verbose:
                         print(f"Simulation take move: {action} on {bike}")
-                    state = transition_function(state, action, bike)
+                    state = transition_function(state, action, bike, make_copies=False)
         else:
             state = node.state
 
+        self.rollout_len.append(n_steps)
         # Not convinced the second argument is correct
         total_return = reward_function(state, state.player)
 
@@ -232,17 +240,19 @@ def choose_move(state: State) -> int:
     Returns:
         The action to take
     """
-    mcts = MCTS(state, rollout_policy=choose_move_rules, explore_coeff=0.5)
+    mcts = MCTS(state, rollout_policy=rules_rollout, explore_coeff=0.5)
     start_time = time.time()
     time_taken = 0.0
     n_rollout = 0
-    while time_taken < 0.5:
+    while time_taken < 0.1:
         mcts.do_rollout()
         n_rollout += 1
-
         time_taken = time.time() - start_time
 
-    print(n_rollout)
+    # print(f"n_rollouts = {n_rollout}")
+    # print(f"rollout_len = {(mcts.rollout_len)}")
+    # print("\n")
+
     return mcts.choose_action()
 
 
@@ -259,6 +269,18 @@ def choose_move(state: State) -> int:
 #     expand_root(MCTS)
 
 
+def profile_me():
+
+    for _ in tqdm(range(100)):
+        play_tron(
+            your_choose_move=choose_move,
+            opponent_choose_move=choose_move,
+            game_speed_multiplier=5,
+            render=False,
+            verbose=False,
+        )
+
+
 if __name__ == "__main__":
 
     #     # # ## Example workflow, feel free to edit this! ###
@@ -268,10 +290,13 @@ if __name__ == "__main__":
     #     )  # <---- Make sure I pass! Or your solution will not work in the tournament!!
 
     #     # Play against your bot!
-    play_tron(
-        your_choose_move=choose_move,
-        opponent_choose_moves=[choose_move] * 2,
-        game_speed_multiplier=5,
-        render=True,
-        verbose=True,
-    )
+
+    cProfile.run("profile_me()", "profile.prof")
+
+    # play_tron(
+    #     your_choose_move=human_player,
+    #     opponent_choose_move=choose_move_square,
+    #     game_speed_multiplier=5,
+    #     render=True,
+    #     verbose=False,
+    # )
