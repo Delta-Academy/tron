@@ -56,26 +56,32 @@ def choose_move_randomly(state: State) -> int:
     return int(random.random() * 3) + 1
 
 
-def choose_move_rules(state: State) -> int:
+def rules_rollout(state: State, bike_move: Optional["Bike"] = None) -> int:
+    if bike_move is None:
+        bike_move = state.player
+
     obstacles = (
         [(ARENA_HEIGHT - 1, i) for i in range(ARENA_WIDTH)]
         + [(i, ARENA_WIDTH - 1) for i in range(ARENA_HEIGHT)]
         + [(i, 0) for i in range(ARENA_HEIGHT)]
         + [(0, i) for i in range(ARENA_WIDTH)]
     )
+
     obstacles += state.player.positions
     for opponent in state.opponents:
         obstacles += opponent.positions
 
     alive_actions = []
+
     for action in [1, 2, 3]:
-        new_state = transition_function(state, action, state.player)
-        new_pos = new_state.player.head
-        if new_pos not in obstacles:
+        bike_moving = deepcopy(bike_move)
+        bike_moving.take_action(action)
+        if bike_moving.head not in obstacles:
             alive_actions.append(action)
 
     if len(alive_actions) == 0:
         return 1
+
     return random.choice(alive_actions)
 
 
@@ -98,13 +104,13 @@ def choose_move_square(state: State) -> int:
 
 def play_tron(
     your_choose_move: Callable,
-    opponent_choose_moves: List[Callable],
+    opponent_choose_move: Callable,
     game_speed_multiplier: float = 1.0,
     render: bool = True,
     verbose: bool = False,
 ) -> float:
     env = TronEnv(
-        opponent_choose_moves=opponent_choose_moves,
+        opponent_choose_move=opponent_choose_move,
         verbose=verbose,
         render=render,
         game_speed_multiplier=game_speed_multiplier,
@@ -118,6 +124,7 @@ def play_tron(
     while not done:
         action = your_choose_move(state)
         state, reward, done, _ = env.step(action)
+        print(reward_function(state, state.player))
         return_ += reward
 
     return return_
@@ -239,6 +246,7 @@ class Bike:
         return self.positions[1:]
 
     def take_action(self, action: int) -> None:
+        assert action in {1, 2, 3}
 
         if action == 2:
             new_orientation = (self.direction + 1) % 4
@@ -301,7 +309,7 @@ class TronEnv(gym.Env):
 
     def __init__(
         self,
-        opponent_choose_moves: List[Callable],
+        opponent_choose_move: Callable,
         verbose: bool = False,
         render: bool = False,
         game_speed_multiplier: float = 1.0,
@@ -313,6 +321,9 @@ class TronEnv(gym.Env):
         player not controlled by opponent_choose_moves) dies. Otherwise
         env continues until a single bike remains.
         """
+
+        # Restrict to single opponent
+        opponent_choose_moves = [opponent_choose_move]
 
         self.choose_move_store = deepcopy(opponent_choose_moves)
 
@@ -446,9 +457,8 @@ class TronEnv(gym.Env):
         reward = 0
         if self.done:
             winner = self.find_winner()
-            if winner is not None and winner == self.player_bike:
-                reward += 1
-
+            if winner is not None:
+                reward = 1 if winner == self.player_bike else -1
         return self.get_bike_state(self.player_bike), reward, self.done, {}
 
     def find_winner(self) -> Optional[Bike]:
@@ -469,14 +479,22 @@ class TronEnv(gym.Env):
 
     def render_game(self, screen: Optional[pygame.Surface] = None) -> None:
 
+        # If no injected screen, use graphical constants
         if screen is None:
             screen = self.screen
+            screen_width = self.SCREEN_WIDTH
+            screen_height = self.SCREEN_HEIGHT
+            block_size = BLOCK_SIZE
+        else:  # Overwrite  visual consts based on screen
+            screen_width = screen.get_width()
+            screen_height = screen.get_height()
+            block_size = screen_width // ARENA_WIDTH  # Assume square
 
         screen.fill(WHITE)
 
         # Draw boundaries
         pygame.draw.rect(
-            screen, BLACK, [1, 1, self.SCREEN_WIDTH - 1, self.SCREEN_HEIGHT - 1], width=BLOCK_SIZE
+            screen, BLACK, [1, 1, screen_width - 1, screen_height - 1], width=block_size
         )
 
         for bike in self.bikes:
@@ -490,7 +508,7 @@ class TronEnv(gym.Env):
                 pygame.draw.rect(
                     screen,
                     color,
-                    [bike_pos[0] * BLOCK_SIZE, bike_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
+                    [bike_pos[0] * block_size, bike_y * block_size, block_size, block_size],
                 )
             # Flip y axis because pygame counts 0,0 as top left
             bike_y = ARENA_HEIGHT - bike.head[1] - 1
@@ -498,10 +516,10 @@ class TronEnv(gym.Env):
                 screen,
                 BLACK,
                 [
-                    bike.head[0] * BLOCK_SIZE,
-                    bike_y * BLOCK_SIZE,
-                    BLOCK_SIZE,
-                    BLOCK_SIZE,
+                    bike.head[0] * block_size,
+                    bike_y * block_size,
+                    block_size,
+                    block_size,
                 ],
             )
 
@@ -520,12 +538,15 @@ def human_player(*args: Any, **kwargs: Any) -> int:
 
 
 # Functional reimplementation of some above logic
-def transition_function(state: State, action: int, bike_move: Bike) -> State:
+def transition_function(
+    state: State, action: int, bike_move: Bike, make_copies: bool = True
+) -> State:
 
-    state = copy(state)
-    bike_move = copy(bike_move)
-    state.player = copy(state.player)
-    state.opponents = [copy(bike) for bike in state.opponents]
+    if make_copies:
+        state = copy(state)
+        bike_move = copy(bike_move)
+        state.player = copy(state.player)
+        state.opponents = [copy(bike) for bike in state.opponents]
 
     bike_move.take_action(action)
 
@@ -535,19 +556,27 @@ def transition_function(state: State, action: int, bike_move: Bike) -> State:
     state = head_to_head_collision(bike_move, state)
 
     # Put the newly moved bike back in the state copy
-    if state.player == bike_move:
-        state.player = bike_move
-    else:
-        for idx, bike in enumerate(state.opponents):
-            if bike == bike_move:
-                state.opponents[idx] = bike_move
+    if make_copies:
+        if state.player == bike_move:
+            state.player = bike_move
+        else:
+            for idx, bike in enumerate(state.opponents):
+                if bike == bike_move:
+                    state.opponents[idx] = bike_move
 
     return state
 
 
 def reward_function(successor_state: State, bike_move: Bike) -> int:
-    bikes = [successor_state.player] + successor_state.opponents
-    return int(all(not bike.alive for bike in bikes if bike != bike_move) and bike_move.alive)
+    player_dead = not successor_state.player.alive
+    opponent_dead = not any(bike.alive for bike in successor_state.opponents)
+    if player_dead and not opponent_dead:
+        return -1
+    elif not player_dead and opponent_dead:
+        return 1
+    return 0
+
+    # return int(all(not bike.alive for bike in bikes if bike != bike_move) and bike_move.alive)
 
 
 def has_hit_tails(bike_head: Tuple[int, int], state: State) -> bool:
