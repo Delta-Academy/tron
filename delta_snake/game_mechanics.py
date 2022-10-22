@@ -466,15 +466,23 @@ class TronEnv(gym.Env):
         self.score_font = pygame.font.SysFont("comicsansms", 35)
 
     def render_game(self, screen: Optional[pygame.Surface] = None) -> None:
+
+        # If no injected screen, use graphical constants
         if screen is None:
             screen = self.screen
+            screen_width = self.SCREEN_WIDTH
+            screen_height = self.SCREEN_HEIGHT
+            block_size = BLOCK_SIZE
+        else:  # Overwrite  visual consts based on screen
+            screen_width = screen.get_width()
+            screen_height = screen.get_height()
+            block_size = screen_width // ARENA_WIDTH  # Assume square
 
-        self.clock.tick()
         screen.fill(WHITE)
 
         # Draw boundaries
         pygame.draw.rect(
-            screen, BLACK, [1, 1, self.SCREEN_WIDTH - 1, self.SCREEN_HEIGHT - 1], width=BLOCK_SIZE
+            screen, BLACK, [1, 1, screen_width - 1, screen_height - 1], width=block_size
         )
 
         for bike in self.bikes:
@@ -488,7 +496,7 @@ class TronEnv(gym.Env):
                 pygame.draw.rect(
                     screen,
                     color,
-                    [bike_pos[0] * BLOCK_SIZE, bike_y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE],
+                    [bike_pos[0] * block_size, bike_y * block_size, block_size, block_size],
                 )
             # Flip y axis because pygame counts 0,0 as top left
             bike_y = ARENA_HEIGHT - bike.head[1] - 1
@@ -496,15 +504,15 @@ class TronEnv(gym.Env):
                 screen,
                 BLACK,
                 [
-                    bike.head[0] * BLOCK_SIZE,
-                    bike_y * BLOCK_SIZE,
-                    BLOCK_SIZE,
-                    BLOCK_SIZE,
+                    bike.head[0] * block_size,
+                    bike_y * block_size,
+                    block_size,
+                    block_size,
                 ],
             )
 
         # This may cause flashing in the tournament
-        pygame.display.update()
+        # pygame.display.update()
 
 
 def human_player(*args: Any, **kwargs: Any) -> int:
