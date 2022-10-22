@@ -10,6 +10,7 @@ from game_mechanics import (
     Bike,
     State,
     get_possible_actions,
+    human_player,
     in_arena,
     is_terminal,
     play_tron,
@@ -232,7 +233,7 @@ def choose_move(state: State) -> int:
     start_time = time.time()
 
     n_rollout = 0
-    while time.time() - start_time < 10 and n_rollout < 10_000:
+    while time.time() - start_time < 0.05 and n_rollout < 10_000:
         mcts.do_rollout()
         n_rollout += 1
 
@@ -285,8 +286,8 @@ def henry_rules_rollout(state: State) -> int:
 def profile_me():
     for _ in tqdm(range(1)):
         play_tron(
-            your_choose_move=choose_move,
-            opponent_choose_move=henry_rules_rollout,
+            your_choose_move=human_player,
+            opponent_choose_move=choose_move,
             game_speed_multiplier=5,
             render=True,
             verbose=False,
