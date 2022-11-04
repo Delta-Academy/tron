@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Callable
 
 import delta_utils.check_submission as checker
-
 from game_mechanics import TronEnv
 
 

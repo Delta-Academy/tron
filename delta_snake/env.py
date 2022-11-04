@@ -3,6 +3,7 @@ import random
 from typing import Dict, List, Literal, Optional, Tuple, cast
 
 import numpy as np
+
 from tqdm import tqdm
 
 Action = Literal[0, 1, 2, 3, 4, 5, 6, 7, 8]

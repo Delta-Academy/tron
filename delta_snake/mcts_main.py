@@ -4,8 +4,6 @@ import random
 import time
 from typing import Callable, Dict, List, Tuple
 
-from tqdm import tqdm
-
 from game_mechanics import (
     Bike,
     State,
@@ -18,6 +16,7 @@ from game_mechanics import (
     transition_function,
 )
 from node import Node, NodeID
+from tqdm import tqdm
 
 TEAM_NAME = "Henry"  # <---- Enter your team name here!
 assert TEAM_NAME != "Team Name", "Please change your TEAM_NAME!"
