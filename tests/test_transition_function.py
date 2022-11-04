@@ -2,13 +2,13 @@ from copy import deepcopy
 
 import numpy as np
 
-from delta_bike.game_mechanics import TronEnv, transition_function
+from delta_snake.game_mechanics import TronEnv, transition_function
 
 
 def test_transition_function_one_step() -> None:
 
     prev_state, _, _, _ = TronEnv(opponent_choose_moves=[lambda x: x]).reset()
-    new_state = transition_function(prev_state, 0, prev_state.player)
+    new_state = transition_function(prev_state, 1, prev_state.player)
 
     for prev_opponent, new_opponent in zip(prev_state.opponents, new_state.opponents):
         assert prev_opponent.positions == new_opponent.positions
@@ -43,7 +43,7 @@ def transition_function_one_step_opponent() -> None:
 
     prev_state, _, _, _ = TronEnv(opponent_choose_moves=[lambda x: x] * 3).reset()
     opponent_idx = np.random.randint(3)
-    new_state = transition_function(prev_state, 0, prev_state.opponents[opponent_idx])
+    new_state = transition_function(prev_state, 1, prev_state.opponents[opponent_idx])
 
     for idx, (prev_opponent, new_opponent) in enumerate(
         zip(prev_state.opponents, new_state.opponents)
