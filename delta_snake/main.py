@@ -8,7 +8,7 @@ from game_mechanics import (
     play_tron,
 )
 
-TEAM_NAME = "Team Namee"  # <---- Enter your team name here!
+TEAM_NAME = "Team Name"  # <---- Enter your team name here!
 assert TEAM_NAME != "Team Name", "Please change your TEAM_NAME!"
 
 
@@ -27,16 +27,15 @@ def choose_move(state: State) -> int:
 
 if __name__ == "__main__":
 
-    # # ## Example workflow, feel free to edit this! ###
+    # Example workflow, feel free to edit this!
 
-    # check_submission(
-    #     TEAM_NAME, choose_move
-    # )  # <---- Make sure I pass! Or your solution will not work in the tournament!!
+    # Make sure this passes, or your solution will not work in the tournament!!
+    check_submission(choose_move)
 
     # Play against your bot!
     play_tron(
         your_choose_move=human_player,
-        opponent_choose_moves=[choose_move],
+        opponent_choose_move=choose_move,
         game_speed_multiplier=5,
         render=True,
         verbose=True,
