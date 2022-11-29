@@ -5,8 +5,11 @@ from game_mechanics import (
     choose_move_randomly,
     choose_move_square,
     human_player,
+    is_terminal,
     play_tron,
+    reward_function,
     rules_rollout,
+    transition_function,
 )
 
 TEAM_NAME = "Team Name"  # <---- Enter your team name here!

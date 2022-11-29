@@ -116,7 +116,6 @@ def play_tron(
         verbose=verbose,
         render=render,
         game_speed_multiplier=game_speed_multiplier,
-        single_player_mode=False,
     )
 
     state, reward, done, _ = env.reset()
@@ -308,16 +307,8 @@ class TronEnv(gym.Env):
         verbose: bool = False,
         render: bool = False,
         game_speed_multiplier: float = 1.0,
-        single_player_mode: bool = True,
     ):
-        """Number of opponents set by the length of opponent_choose_moves.
 
-        If single_player_mode = True, the env will be done if player1 (the
-        player not controlled by opponent_choose_moves) dies. Otherwise
-        env continues until a single bike remains.
-        """
-
-        # Restrict to single opponent
         self.opponent_choose_move = opponent_choose_move
         self._render = render
         self.verbose = verbose
@@ -327,8 +318,6 @@ class TronEnv(gym.Env):
         self.score = 0
         if self._render:
             self.init_visuals()
-
-        self.single_player_mode = single_player_mode
 
     def reset(self) -> Tuple[State, int, bool, Dict]:
         self.num_steps_taken = 0
