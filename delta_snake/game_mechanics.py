@@ -83,7 +83,6 @@ def rules_rollout(state: State) -> int:
         if bike_moving.head not in obstacles:
             return action
         else:
-            # print("Remove", action)
             poss_actions.remove(action)
     return 1
 
@@ -117,7 +116,6 @@ def play_tron(
         verbose=verbose,
         render=render,
         game_speed_multiplier=game_speed_multiplier,
-        single_player_mode=False,
     )
 
     state, reward, done, _ = env.reset()
@@ -128,7 +126,8 @@ def play_tron(
         action = your_choose_move(state)
         state, reward, done, _ = env.step(action)
         return_ += reward
-        print("Done", done, "is_terminal", is_terminal(state), "state:", state.state_id)
+        if verbose:
+            print("Done", done, "is_terminal", is_terminal(state), "state:", state.state_id)
 
     return return_
 
@@ -308,16 +307,8 @@ class TronEnv(gym.Env):
         verbose: bool = False,
         render: bool = False,
         game_speed_multiplier: float = 1.0,
-        single_player_mode: bool = True,
     ):
-        """Number of opponents set by the length of opponent_choose_moves.
 
-        If single_player_mode = True, the env will be done if player1 (the
-        player not controlled by opponent_choose_moves) dies. Otherwise
-        env continues until a single bike remains.
-        """
-
-        # Restrict to single opponent
         self.opponent_choose_move = opponent_choose_move
         self._render = render
         self.verbose = verbose
@@ -327,8 +318,6 @@ class TronEnv(gym.Env):
         self.score = 0
         if self._render:
             self.init_visuals()
-
-        self.single_player_mode = single_player_mode
 
     def reset(self) -> Tuple[State, int, bool, Dict]:
         self.num_steps_taken = 0
@@ -370,7 +359,7 @@ class TronEnv(gym.Env):
                 bike.kill_bike()
         self.head_to_head_collision()
 
-        if self.verbose and self.num_steps_taken % 100 == 0:
+        if self.verbose:
             print(f"{self.num_steps_taken} steps taken")
 
     def head_to_head_collision(self) -> None:
@@ -477,7 +466,7 @@ class TronEnv(gym.Env):
             )
 
         # This may cause flashing in the tournament
-        # pygame.display.update()
+        pygame.display.update()
 
 
 def human_player(*args: Any, **kwargs: Any) -> int:
