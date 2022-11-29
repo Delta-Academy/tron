@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import gym
 import numpy as np
+
+import gym
 import pygame
 
 ARENA_WIDTH = 15
@@ -489,38 +490,17 @@ def human_player(*args: Any, **kwargs: Any) -> int:
     return 1
 
 
-# # Functional reimplementation of some above logic
-# def transition_function(state: State, action: int, bike_move: Bike) -> State:
-
-#     new_state = State(state.player, state.opponents)
-#     bike_move = copy(bike_move)
-#     # state.player = copy(state.player)
-#     # state.opponents = [copy(bike) for bike in state.opponents]
-
-#     bike_move.take_action(action)
-
-#     if has_hit_tails(bike_move.head, state) or bike_move.has_hit_boundaries():
-#         bike_move.kill_bike()
-
-#     # new_state = head_to_head_collision(bike_move, new_state)
-
-#     new_state = State(state.player, state.opponents)
-
-#     # Put the newly moved bike back in the state copy
-#     if new_state.player == bike_move:
-#         new_state.player = bike_move
-#     else:
-#         for idx, bike in enumerate(new_state.opponents):
-#             if bike == bike_move:
-#                 new_state.opponents[idx] = bike_move
-
-#     new_state = head_to_head_collision(bike_move, new_state)
-
-#     return new_state
-
-
-# Functional reimplementation of some above logic
 def transition_function(state: State, action: int, make_copies: bool = True) -> State:
+    """The transition function return a new State after an action has been taken in the current
+    state.
+
+    Tron requires both players to move simultaneously. The first time this function is called it
+    should be called with the action of the player. This move is stored but the player is not moved.
+    The second time this function is called it should be called with the action of the opponent.
+    This time both players are moved. If make_copies is set to True the state is copied before the
+    action is taken to avoid mutating the original state.
+    """
+
     if make_copies:
         state = State(copy(state.player), copy(state.opponent), state.player_move)
 
