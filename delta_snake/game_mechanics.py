@@ -83,7 +83,6 @@ def rules_rollout(state: State) -> int:
         if bike_moving.head not in obstacles:
             return action
         else:
-            # print("Remove", action)
             poss_actions.remove(action)
     return 1
 
@@ -128,7 +127,8 @@ def play_tron(
         action = your_choose_move(state)
         state, reward, done, _ = env.step(action)
         return_ += reward
-        print("Done", done, "is_terminal", is_terminal(state), "state:", state.state_id)
+        if verbose:
+            print("Done", done, "is_terminal", is_terminal(state), "state:", state.state_id)
 
     return return_
 
@@ -370,7 +370,7 @@ class TronEnv(gym.Env):
                 bike.kill_bike()
         self.head_to_head_collision()
 
-        if self.verbose and self.num_steps_taken % 100 == 0:
+        if self.verbose:
             print(f"{self.num_steps_taken} steps taken")
 
     def head_to_head_collision(self) -> None:
@@ -477,7 +477,7 @@ class TronEnv(gym.Env):
             )
 
         # This may cause flashing in the tournament
-        # pygame.display.update()
+        pygame.display.update()
 
 
 def human_player(*args: Any, **kwargs: Any) -> int:

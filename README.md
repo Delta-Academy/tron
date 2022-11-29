@@ -16,6 +16,10 @@ You are navigating a grid. At each timestep, you can take 1 of 3 possible action
 
 **Turning left** or **right** will change the direction of the bike in that direction, and move the bike forward 1 square in that direction.
 
+You should use Monte Carlo Tree Search to play.
+
+:rotating_light: :rotating_light: :rotating_light: **You will have a maximum of 0.5 seconds to compute each move!** :rotating_light: :rotating_light: :rotating_light:
+
 ### The game
 
 Each step you drive forward, your light tail extends behind you
@@ -26,11 +30,9 @@ You win and are rewarded if you are vanquish your opponents and remain the last 
 
 ### Opponents
 
-You will share the arena with multiple **opponents**!
+You will share the arena with another **light bike**
 
-These **opponents** are subject to the same rules and logic as you.
-
-Your **goal** is to defeat your opponents.
+Your **goal** is to defeat your opponent.
 
 # Competition Rules :scroll:
 

@@ -3,23 +3,17 @@ from pathlib import Path
 from typing import Callable, Dict
 
 import delta_utils.check_submission as checker
+from game_mechanics import TronEnv
 from torch import nn
 
-from game_mechanics import TronEnv
 
+def check_submission(choose_move: Callable, mcts) -> None:
 
-def check_submission(team_name: str, choose_move: Callable) -> None:
-
-    example_state, _, _, _ = TronEnv(opponent_choose_moves=[lambda x: x]).reset()
+    example_state, _, _, _ = TronEnv(opponent_choose_move=lambda x: x).reset()
     expected_choose_move_return_type = int
-    game_mechanics_expected_hash = (
-        "c96d4ddbdf3910a25d578fadcaf4d3dc0daf2d59ecce4bce49a7159d0f535fa8"
-    )
-    expected_pkl_output_type = (None,)
-    pkl_file = None
-
+    expected_pkl_output_type = None
     t1 = time.time()
-    choose_move(example_state)
+    choose_move(example_state, mcts)
     t2 = time.time()
     assert t2 - t1 < 0.5, "Oh no your choose_move takes longer than 500ms, this is too slow!"
 
@@ -29,6 +23,6 @@ def check_submission(team_name: str, choose_move: Callable) -> None:
         expected_pkl_type=expected_pkl_output_type,
         pkl_file=None,
         pkl_checker_function=None,
-        game_mechanics_hash=game_mechanics_expected_hash,
         current_folder=Path(__file__).parent.resolve(),
+        choose_move_extra_argument={"mcts": mcts},
     )
