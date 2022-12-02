@@ -2,9 +2,10 @@ import time
 from pathlib import Path
 from typing import Callable, Dict
 
+from torch import nn
+
 import delta_utils.check_submission as checker
 from game_mechanics import TronEnv
-from torch import nn
 
 
 def check_submission(choose_move: Callable, mcts) -> None:
