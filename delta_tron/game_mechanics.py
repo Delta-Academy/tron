@@ -6,9 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import numpy as np
-
 import gym
+import numpy as np
 import pygame
 
 ARENA_WIDTH = 15
@@ -427,7 +426,10 @@ class TronEnv(gym.Env):
             screen_width = self.SCREEN_WIDTH
             screen_height = self.SCREEN_HEIGHT
             block_size = BLOCK_SIZE
+            update_pygame = True
         else:  # Overwrite  visual consts based on screen
+            # External screen should deal with updating
+            update_pygame = False
             screen_width = screen.get_width()
             screen_height = screen.get_height()
             block_size = screen_width // ARENA_WIDTH  # Assume square
@@ -465,8 +467,8 @@ class TronEnv(gym.Env):
                 ],
             )
 
-        # This may cause flashing in the tournament
-        pygame.display.update()
+        if update_pygame:
+            pygame.display.update()
 
 
 def human_player(*args: Any, **kwargs: Any) -> int:
